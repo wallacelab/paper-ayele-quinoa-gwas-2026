@@ -13,6 +13,7 @@ git push -u origin main
 find ./ | grep -i -e "\.sh$" -e "\.py$" -e "\.r$" | xargs -d "\n" git add
 
 # Add support files
+git add 0_Scripts/adapters.fa  # Sequencing adapter file for read cleaning
 
 # Add key intermediate files
 
