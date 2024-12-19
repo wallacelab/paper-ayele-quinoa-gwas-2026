@@ -1,8 +1,86 @@
 #! /bin/bash
 
+# Align reads to Quinoa genome and call SNPs, including quality control
 
+# Arguments
+scriptdir=$1 # Folder with accessory scripts in it
+workdir=$2  # Working directory for this script
+trimdir=$3  # Directory where trimmed fastq sequences need to end up
+joindir=$4  # Directory where pair-joined fastq files need to end up
+genome=$5   # Genome to align against (=fasta file), already indexed by BWA
+num_cores=$6
+
+# Relevant folders
+bamdir=$workdir/2a_alignments
+
+# Set up folder structures
+if [ ! -e $workdir ]; then mkdir $workdir; fi
+if [ ! -e $bamdir ]; then mkdir $bamdir; fi
 
  
+###################
+# CONDA ENVIRONMENTS
+###################
+
+# Conda environment names. (These are handled with Miniconda and are meant to make things reproducible by making identical environments)
+conda_bwa=bwa-0.7.17
+conda_bcftools=bcftools-1.9
+conda_samtools=samtools-1.16.1
+
+# Load functions required to be able to activate conda environments within scripts.
+. $(conda info --root)/etc/profile.d/conda.sh   # Loads the functions required to activate conda; KEEP THIS COMMAND UNCOMMENTED
+
+###################
+# Genome Alignment
+##################
+
+# Align to genome; keeping merged and unmerged reads separate to be able to compare them afterward
+for fwd in $trimdir/*_1P.fastq.gz; do
+
+    # Derive names and files 
+    sample=`basename $fwd`
+    sample=${sample/_1P.fastq.gz/}
+    rev=${fwd/_1P.fastq.gz/_2P.fastq.gz}
+
+    # Align
+    conda activate $conda_bwa
+    bwa mem -t $num_cores $genome $fwd $rev > $bamdir/$sample.sam     
+
+    # Compress, sort, & index
+    conda activate $conda_samtools
+    samtools sort -@ $num_cores -o $bamdir/$sample.bam $bamdir/$sample.sam
+    samtools index $bamdir/$sample.bam
+  
+    # Cleanup
+    rm $bamdir/$sample.sam
+
+    # break
+done
+
+
+# # Align each sample to the genome
+# for sample in $src/*.fastq.gz; do
+#     name=`basename $sample`
+#     name=${name/_R1*/}
+#     echo "Processing alignments for $name"
+#     
+# #     Align to genome
+#     bwa aln -t $numcores -f $workdir/1_$name.sai $genome $sample
+# 
+#     # Convert to SAM
+#     bwa samse $genome $workdir/1_$name.sai $sample > $workdir/1_$name.sam
+#     
+# #     Convert to BAM & sort
+#     samtools view -h -S -b $workdir/1_$name.sam > $workdir/1_$name.bam
+#     samtools sort -@ $numcores $workdir/1_$name.bam $workdir/1_$name.sorted
+#     samtools index $workdir/1_$name.sorted.bam
+# 
+#     rm $workdir/1_$name.sam $workdir/1_$name.sai $workdir/1_$name.bam 
+# #     break
+# done
+
+
+
 # Note: The commands that were originally used to call SNPs (from their VCF file) was:
 #    samtoolsCommand=samtools mpileup -q 1 -C 50 -t SP -t DP -m 2 -F 0.002 /
 #            -uf /TJPROJ6/CCX/DataBase/Chenopodium_quinoa/quinoa.kazusa.or.jp/Cqu_r1.0.fasta /
@@ -12,34 +90,9 @@
 
 # The newest Quinoa genome (QQ74_v2, from Rey et al 2023) did a diversity study where "only biallelic variants with minimum read depth 5, maximum missing data 20% and MAF 0.01% were retained"
 
-###################
-# CREATE CONDA ENVIRONMENT
-###################
-
-# Conda environment names. (These are handled with Miniconda and are meant to make things reproducible by making identical environments)
-conda_bcftools=bcftools-1.9
-
-# Load functions required to be able to activate conda environments within scripts.
-. $(conda info --root)/etc/profile.d/conda.sh   # Loads the functions required to activate conda; KEEP THIS COMMAND UNCOMMENTED
-conda activate $conda_bcftools
 
 
-# #! /bin/bash
-# 
-# # Get SNPs for each of the samples
-# 
-# # Add BedOps package to file path
-# BEDOPS=/home/jgwall/Software/FileTools/BedOps
-# export PATH="$PATH:$BEDOPS" 
-# 
-# genome=$HOME/Projects/0_RawData/SorghumGenome/3.1_phytozome/Sbicolor_313_v3.0.fa
-# src=$HOME/Projects/0_RawData/Sequencing/2019_11_20_Sorghum_GBS_for_FVSU/
-# public_snps=$HOME/Projects/0_RawData/SorghumGermplasm/Hu_et_al_10k_GBS_genotypes/SNPs_imp.recode.vcf.bgzip.gz
-# sample_name_key=0_sample_rename_key.txt
-# numcores=7 # Number of cores/threads to use
-# 
-# workdir=1_CallGenotypes
-# if [ ! -e $workdir ]; then mkdir $workdir; fi
+
 
 
 
