@@ -2,7 +2,16 @@
 
 # Run genotyping of Quinoa SNPs
 
-# Note: restriction enzymes were HaeIII (GG|CC) + MspI (C|CGG). HaeIII is a blunt-end cutter and all sequences start with TAA, so not sure what's going on.
+# Note: restriction enzymes were supposedly HaeIII (GG|CC) + MspI (C|CGG). HaeIII is a blunt-end cutter and all sequences start with TAA, so not sure what's going on.
+#       Looking at an example BAM alignment (1001), it looks like it was a TTAA cutter, and MseI cuts T|TAA, which would match the output
+#          Fwd (relative to genome)    Rev (relative to genome)
+#              AGTTTAACGAT                     GGTTAAGGAT
+#             GAATTTAAAAAC                     TTTTAATAA
+#              TATTTAAGG                       GCTTAAAGC
+#             AATTTTAAGA                      CGATTAAACT
+#             AATTTTAAGG                       CATTAAAGT
+#              CGATTAAAA                        CTTAATC
+
 
 
 # Set up global variables
@@ -24,8 +33,6 @@ if [[ ! -e $qcdir ]] ; then mkdir $qcdir; fi
 if [[ ! -e $snpdir ]] ; then mkdir $snpdir; fi
 
 
-# TODO - Remove read merging. samtools mpileup handles overlaps automatically
-
 
 # # Basic quality control (fastqc, multiqc, adaptor trimming, etc. Looking at one of CD Genomics' BAM files, everything was still 144 bp, so no adapter trimming?)
 # # NOTE: Not trimming off after a second cut site; will rely on chimera detection to filter those out
@@ -35,9 +42,9 @@ if [[ ! -e $snpdir ]] ; then mkdir $snpdir; fi
 # max_pval=0.001  # MAximum p-value for paired end joining with PEAR
 # bash $scriptdir/1_QualityControl.sh $scriptdir $qcdir $rawdir $trimdir $pairdir $adapters $min_overlap $max_pval $num_cores
 
-# TODO: When align, find way of removing chimeras. BWA can report 2+ alignments for chimeras, so maybe just choose singly mapping ones?
 
-
-# Call SNPs
-bash $scriptdir/2_CallSnps.sh $scriptdir $snpdir $trimdir $joindir $genome $num_cores
+# Call SNPs; supposedly mpileup only uses primary alignments, so that plus min quality 20 should remove chimeras
+max_depth=10000 # Maximum depth to pileup
+min_base_quality=20 # Minimum base quality for pileup
+bash $scriptdir/2_CallSnps.sh $scriptdir $snpdir $trimdir $joindir $genome $max_depth $min_base_quality $num_cores
 

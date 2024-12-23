@@ -77,38 +77,38 @@ conda_pear=pear-0.9.6              # PEAR paired-end read merger
 #     -o $workdir/1b_read_retention_after_trimming
 
 
-###################
-# Join paired ends - DEPRECATED. Samtools mpileup will remove overlaps by default, so no need to merge
-###################
-
-# # Join reads
-# conda activate $conda_pear
-# for fwd in $trimdir/*_1P.fastq.gz; do
-#     rev=${fwd/_1P/_2P}
-#     sample=${fwd/_1P.fastq.gz/}
-#     sample=${sample/$trimdir\//}
-#     pear  -f $fwd -r $rev -o $pairdir/$sample --min-overlap $min_overlap --p-value $max_pval --threads $num_cores
-#     pigz $pairdir/$sample*.fastq # Zip up output files
-# done
-
-# # Count reads in each class
-# countfile=$workdir/1c_pairjoin_file_stats.txt
-# echo -e "sample\tset\treads" > $countfile
-# for fastq in $pairdir/*.fastq.gz; do
-#     # File info
-#     info=`basename $fastq`
-#     info=${info/.fastq.gz/}
-#     sample=${info/\.*/}
-#     set=${info/*\./}
-#     
-#     # Read counts
-#     count=`zcat $fastq | wc -l`
-#     count=$(( $count / 4 ))
-#     
-#     echo -e "$sample\t$set\t$count" >> $countfile
-#     #break
-# done
-# 
-# Rscript $scriptdir/1c_PlotReadJoinStats.r -i $countfile -o $workdir/1c_read_join_stats
+# # # # # # # # ###################
+# # # # # # # # # Join paired ends - DEPRECATED. Samtools mpileup will remove overlaps by default, so no need to merge
+# # # # # # # # ###################
+# # # # # # # # 
+# # # # # # # # # # Join reads
+# # # # # # # # # conda activate $conda_pear
+# # # # # # # # # for fwd in $trimdir/*_1P.fastq.gz; do
+# # # # # # # # #     rev=${fwd/_1P/_2P}
+# # # # # # # # #     sample=${fwd/_1P.fastq.gz/}
+# # # # # # # # #     sample=${sample/$trimdir\//}
+# # # # # # # # #     pear  -f $fwd -r $rev -o $pairdir/$sample --min-overlap $min_overlap --p-value $max_pval --threads $num_cores
+# # # # # # # # #     pigz $pairdir/$sample*.fastq # Zip up output files
+# # # # # # # # # done
+# # # # # # # # 
+# # # # # # # # # # Count reads in each class
+# # # # # # # # # countfile=$workdir/1c_pairjoin_file_stats.txt
+# # # # # # # # # echo -e "sample\tset\treads" > $countfile
+# # # # # # # # # for fastq in $pairdir/*.fastq.gz; do
+# # # # # # # # #     # File info
+# # # # # # # # #     info=`basename $fastq`
+# # # # # # # # #     info=${info/.fastq.gz/}
+# # # # # # # # #     sample=${info/\.*/}
+# # # # # # # # #     set=${info/*\./}
+# # # # # # # # #     
+# # # # # # # # #     # Read counts
+# # # # # # # # #     count=`zcat $fastq | wc -l`
+# # # # # # # # #     count=$(( $count / 4 ))
+# # # # # # # # #     
+# # # # # # # # #     echo -e "$sample\t$set\t$count" >> $countfile
+# # # # # # # # #     #break
+# # # # # # # # # done
+# # # # # # # # # 
+# # # # # # # # # Rscript $scriptdir/1c_PlotReadJoinStats.r -i $countfile -o $workdir/1c_read_join_stats
 
  

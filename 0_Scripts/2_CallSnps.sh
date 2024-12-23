@@ -8,14 +8,18 @@ workdir=$2  # Working directory for this script
 trimdir=$3  # Directory where trimmed fastq sequences need to end up
 joindir=$4  # Directory where pair-joined fastq files need to end up
 genome=$5   # Genome to align against (=fasta file), already indexed by BWA
-num_cores=$6
+max_depth=$6 # Maximum depth to pileup
+min_base_quality=$7 # Minimum base quality for pileup
+num_cores=$8
 
 # Relevant folders
 bamdir=$workdir/2a_alignments
+snpdir=$workdir/2b_raw_snps
 
 # Set up folder structures
 if [ ! -e $workdir ]; then mkdir $workdir; fi
 if [ ! -e $bamdir ]; then mkdir $bamdir; fi
+if [ ! -e $snpdir ]; then mkdir $snpdir; fi
 
  
 ###################
@@ -34,65 +38,28 @@ conda_samtools=samtools-1.16.1
 # Genome Alignment
 ##################
 
-# Align to genome; keeping merged and unmerged reads separate to be able to compare them afterward
-for fwd in $trimdir/*_1P.fastq.gz; do
-
-    # Derive names and files 
-    sample=`basename $fwd`
-    sample=${sample/_1P.fastq.gz/}
-    rev=${fwd/_1P.fastq.gz/_2P.fastq.gz}
-
-    # Align
-    conda activate $conda_bwa
-    bwa mem -t $num_cores $genome $fwd $rev > $bamdir/$sample.sam     
-
-    # Compress, sort, & index
-    conda activate $conda_samtools
-    samtools sort -@ $num_cores -o $bamdir/$sample.bam $bamdir/$sample.sam
-    samtools index $bamdir/$sample.bam
-  
-    # Cleanup
-    rm $bamdir/$sample.sam
-
-    # break
-done
-
-
-# # Align each sample to the genome
-# for sample in $src/*.fastq.gz; do
-#     name=`basename $sample`
-#     name=${name/_R1*/}
-#     echo "Processing alignments for $name"
-#     
-# #     Align to genome
-#     bwa aln -t $numcores -f $workdir/1_$name.sai $genome $sample
+# # Align to genome
+# for fwd in $trimdir/*_1P.fastq.gz; do
 # 
-#     # Convert to SAM
-#     bwa samse $genome $workdir/1_$name.sai $sample > $workdir/1_$name.sam
-#     
-# #     Convert to BAM & sort
-#     samtools view -h -S -b $workdir/1_$name.sam > $workdir/1_$name.bam
-#     samtools sort -@ $numcores $workdir/1_$name.bam $workdir/1_$name.sorted
-#     samtools index $workdir/1_$name.sorted.bam
+#     # Derive names and files 
+#     sample=`basename $fwd`
+#     sample=${sample/_1P.fastq.gz/}
+#     rev=${fwd/_1P.fastq.gz/_2P.fastq.gz}
 # 
-#     rm $workdir/1_$name.sam $workdir/1_$name.sai $workdir/1_$name.bam 
-# #     break
+#     # Align
+#     conda activate $conda_bwa
+#     bwa mem -t $num_cores $genome $fwd $rev > $bamdir/$sample.sam     
+# 
+#     # Compress, sort, & index
+#     conda activate $conda_samtools
+#     samtools sort -@ $num_cores -o $bamdir/$sample.bam $bamdir/$sample.sam
+#     samtools index $bamdir/$sample.bam
+#   
+#     # Cleanup
+#     rm $bamdir/$sample.sam
+# 
+#     # break
 # done
-
-
-
-# Note: The commands that were originally used to call SNPs (from their VCF file) was:
-#    samtoolsCommand=samtools mpileup -q 1 -C 50 -t SP -t DP -m 2 -F 0.002 /
-#            -uf /TJPROJ6/CCX/DataBase/Chenopodium_quinoa/quinoa.kazusa.or.jp/Cqu_r1.0.fasta /
-#            -b /TJNAS01/CCX/Project/Variation/X101SC19121988-Z01_an100biqi_jy/F019_part2_merge_part1/BWA/sort.bam.list  /
-#            -l /TJNAS01/CCX/Project/Variation/X101SC19121988-Z01_an100biqi_jy/F019_part2_merge_part1/SNP/01.split/Chenopodium_quinoa_split_0
-#    reference=file:///TJPROJ6/CCX/DataBase/Chenopodium_quinoa/quinoa.kazusa.or.jp/Cqu_r1.0.fasta
-
-# The newest Quinoa genome (QQ74_v2, from Rey et al 2023) did a diversity study where "only biallelic variants with minimum read depth 5, maximum missing data 20% and MAF 0.01% were retained"
-
-
-
-
 
 
 
@@ -100,119 +67,50 @@ done
 # Run Genotyping
 ###################
 
-# # Index genome for alignment (bwa version 0.7.12-r1039)
-# bwa index $genome 
-
-# # Align each sample to the genome
-# for sample in $src/*.fastq.gz; do
-#     name=`basename $sample`
-#     name=${name/_R1*/}
-#     echo "Processing alignments for $name"
-#     
-# #     Align to genome
-#     bwa aln -t $numcores -f $workdir/1_$name.sai $genome $sample
-# 
-#     # Convert to SAM
-#     bwa samse $genome $workdir/1_$name.sai $sample > $workdir/1_$name.sam
-#     
-# #     Convert to BAM & sort
-#     samtools view -h -S -b $workdir/1_$name.sam > $workdir/1_$name.bam
-#     samtools sort -@ $numcores $workdir/1_$name.bam $workdir/1_$name.sorted
-#     samtools index $workdir/1_$name.sorted.bam
-# 
-#     rm $workdir/1_$name.sam $workdir/1_$name.sai $workdir/1_$name.bam 
-# #     break
-# done
-
-# # Index genome for samtools
-# samtools faidx $genome  
-
-# # Get list of locations to call at; have to tweak the format
-# zcat $public_snps | vcf2bed | cut -f1-3 > $workdir/1a_target_locations.bed
-# cat $workdir/1a_target_locations.bed | sed -r -e "s/^/Chr0/" | sed -e "s/Chr010/Chr10/" > $workdir/1a_target_locations.corrected.bed
-
-# # Call SNPs on all samples (skip indels with --skip-variants b/c there are no indels in the Hu et al data and it causes issues trying to merge & impute them)
-# max_depth=1000
-# min_base_quality=20 
-# bcftools mpileup -d $max_depth -f $genome --regions-file $workdir/1a_target_locations.corrected.bed -Q $min_base_quality --output-type z --output $workdir/1b_raw_probs.vcf.gz  $workdir/*.sorted.bam  
-# bcftools call --multiallelic-caller --threads $numcores --skip-variants indels --output $workdir/1c_snp_calls.vcf.gz --output-type z $workdir/1b_raw_probs.vcf.gz 
-
-# # Replace sample, site, and chromosome names throughout the VCF file.
-# python3 1d_RenameVcfSamplesAndSites.py -i $workdir/1c_snp_calls.vcf.gz -o $workdir/1d_snp_calls.renamed.vcf.gz --sample-keyfile $sample_name_key # --debug
+# # # Note: The commands that CD Genomics originally used to call SNPs (from their VCF file) was:
+# # #    samtoolsCommand=samtools mpileup -q 1 -C 50 -t SP -t DP -m 2 -F 0.002 /
+# # #            -uf /TJPROJ6/CCX/DataBase/Chenopodium_quinoa/quinoa.kazusa.or.jp/Cqu_r1.0.fasta /
+# # #            -b /TJNAS01/CCX/Project/Variation/X101SC19121988-Z01_an100biqi_jy/F019_part2_merge_part1/BWA/sort.bam.list  /
+# # #            -l /TJNAS01/CCX/Project/Variation/X101SC19121988-Z01_an100biqi_jy/F019_part2_merge_part1/SNP/01.split/Chenopodium_quinoa_split_0
+# # #    reference=file:///TJPROJ6/CCX/DataBase/Chenopodium_quinoa/quinoa.kazusa.or.jp/Cqu_r1.0.fasta
 
 
-# # Make keys to correct sample and site names for when merged with existing key
 
-# DEPRECATED zcat $workdir/1c_snp_calls.vcf.gz | grep "^Chr" | sed -r "s|^Chr(..)\t([0-9]+)\t.+|Chr\1\t\2\tS\1_\2|" | sed "s|\tS0|\tS|"  > $workdir/1d.site-rename-key.txt  # Capture chrom + position to make a site name compatible with existing data
+# bcftools mpileup is still a single-core process, apparently, so split by chromosome to be able to do parallel processing
+
+# Get chromosomes & contigs from genome index
+chroms=`cut -f1 $genome.fai | grep "^Cq"`
+contigs=`cut -f1 $genome.fai | grep -v "^Cq" | tr '\n' ',' | sed -r -e "s/,$//"` # Join contigs with commas and remove terminal comma
+
+## Make commands
+commands=$workdir/2b_commands.txt
+echo "" > $commands # Clear out from previous attempts
+for chrom in $contigs $chroms ; do
+    # determine output name
+    if [[ "$chrom" == *"Contig"* ]] ; then
+        name="contigs"
+    else
+        name=$chrom
+    fi
+    
+    # Record command for later parallel processing
+    echo "bcftools mpileup -d $max_depth -f "$genome" -r $chrom -Q $min_base_quality --output-type u --skip-indels --annotate FORMAT/AD,FORMAT/DP $bamdir/*.bam | " \
+        "bcftools call --multiallelic-caller --skip-variants indels --output $snpdir/2b_$name.raw.bcf --output-type b --variants-only " >> $commands
+done
+
+# Run in parallel
+conda activate $conda_bcftools
+cat $commands | parallel --progress
+
+
+
+# NOTE The newest Quinoa genome (QQ74_v2, from Rey et al 2023) did a diversity study where "only biallelic variants with minimum read depth 5, maximum missing data 20% and MAF 0.01% were retained"
 
 
 
 
-# Details from Hu et al for how they got the alignment
-# Do I need to do GBS, or just realign and call at these specific locations? I think the latter makes more sense.
-# Burrows–Wheeler Alignment version 0.7.10 (Li and Durbin, 2009). The raw GBS
-# reads were converted to tags with the -GBSSeqToTag-DBPlugin tool with -kmerLength 64, -minKmerL 20,
-# -mnQS 20, and -mxKmerNum 100000000. The tags were converted to fastq format with -TagExportToFastqPlugin,
-# then aligned to the reference genome using aln option and converted to SAM format using samse option in
-# Burrows–Wheeler Alignment. 
 
 
-# # # # BELOW FROM HEMP PIPELINE
-# # # # 
-# # # # #! /bin/bash
-# # # # 
-# # # # # Rerunning the hemp genotyping pipeline because first run filtered out PCR duplicates, which is all GBS is
-# # # # 
-# # # # # BWA alignment step maintained from initial analysis; those commands kept in 0_bwa_commands.sh
-# # # # 
-# # # # TASSEL5="run_pipeline.pl -Xms10g -Xmx40g"
-# # # # bam_dir="/media/jgwall/Seagate Expansion Drive/Hemp_diversity_GS/Hemp_variant_calling/Bams/"
-# # # # genome="$HOME/Projects/0_RawData/HempGenome/GCF_900626175.1_cs10_genomic.fna"
-# # # # restriction_site="CAYNNNNRTG" # MslI restriction site in normal nucleotides. Mostly here for reference
-# # # # hplc_results="0_HDGS_HPLC_Results.csv"
-# # # # ncores=7 # number of processor cores to use
-# # # # 
-# # # # # Subdirectories
-# # # # scriptdir="0_Scripts"
-# # # # sortdir="1_bams_sorted"
-# # # # filtdir="1a_filtering"
-# # # # if [ ! -e $sortdir ] ; then mkdir $sortdir; fi
-# # # # if [ ! -e $filtdir ] ; then mkdir $filtdir; fi
-# # # # 
-# # # # ###################
-# # # # # CONDA ENVIRONMENT
-# # # # ###################
-# # # # 
-# # # # # Conda environment name. See accompanying 0_CreateCondaEnvironment.sh file for how to create an identical environment
-# # # # conda_hemp=proj-hemp-genotyping-2020  
-# # # # 
-# # # # # Load functions required to be able to activate conda environments within scripts. KEEP THIS COMMAND UNCOMMENTED
-# # # # . $(conda info --root)/etc/profile.d/conda.sh   
-# # # # conda activate $conda_hemp
-# # # # 
-# # # # ##############
-# # # # # Rebuild genotypes from BAM files
-# # # # ##############
-# # # # 
-# # # # # for sam in "$bam_dir"/*.aligned.sam; do
-# # # # #     name=`basename "$sam"`
-# # # # #     name=${name/.sam/}
-# # # # #     echo $name
-# # # # # 
-# # # # #       
-# # # # #     samtools view -h -S -b "$sam" > $sortdir/$name.bam
-# # # # #     samtools sort -@ $ncores $sortdir/$name.bam $sortdir/$name.sorted
-# # # # #     samtools index $sortdir/$name.sorted.bam
-# # # # #     rm $sortdir/$name.bam
-# # # # #     
-# # # # # done
-# # # # 
-# # # # # # Call SNPs on all samples (skip indels with --skip-variants b/c these are harder to score and can cause issues). This takes ~36 hours on an 8-core machine
-# # # # # max_depth=10000
-# # # # # min_base_quality=20 
-# # # # # bcftools mpileup -d $max_depth -f "$genome" -Q $min_base_quality --output-type u --skip-indels --threads $ncores --annotate FORMAT/AD,FORMAT/DP $sortdir/*.sorted.bam  | \
-# # # # #     bcftools call --multiallelic-caller --threads $ncores --skip-variants indels --output 1b_hemp.snp_calls.bcf --output-type b --variants-only 
-# # # # 
 # # # # ##############
 # # # # # Basic Filtering - Depth
 # # # # ##############
