@@ -1,0 +1,16 @@
+name: bwa-0.7.17
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - _libgcc_mutex=0.1=conda_forge
+  - _openmp_mutex=4.5=2_gnu
+  - bwa=0.7.17=he4a0461_11
+  - libgcc-ng=13.2.0=h807b86a_3
+  - libgomp=13.2.0=h807b86a_3
+  - libnsl=2.0.1=hd590300_0
+  - libzlib=1.2.13=hd590300_5
+  - perl=5.32.1=4_hd590300_perl5
+  - zlib=1.2.13=hd590300_5
+prefix: /home/jgwall/Software/Python/miniconda3/envs/bwa-0.7.17
