@@ -46,5 +46,12 @@ if [[ ! -e $snpdir ]] ; then mkdir $snpdir; fi
 # Call SNPs; supposedly mpileup only uses primary alignments, so that plus min quality 20 should remove chimeras
 max_depth=10000 # Maximum depth to pileup
 min_base_quality=20 # Minimum base quality for pileup
-bash $scriptdir/2_CallSnps.sh $scriptdir $snpdir $trimdir $joindir $genome $max_depth $min_base_quality $num_cores
+subsample_for_stats=100000 # Subsample the raw SNP file to this amount to get genotyping stats
+minDP=5  # Minimum genotype depth to keep a genotype call
+maxDP=200 # Maximum genotype depth to keep a genotype call
+min_maf=0.05   # Minimum minor allele freq to keep a site
+max_missing=0.5 # Max fraction missing to keep a site
+max_het=0.25 # Max p% heterozygous to keep a site
+bash $scriptdir/2_CallSnps.sh $scriptdir $snpdir $trimdir $joindir $genome $max_depth $min_base_quality $subsample_for_stats \
+    $minDP $maxDP $min_maf $max_missing $max_het $num_cores
 

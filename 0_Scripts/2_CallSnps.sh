@@ -10,7 +10,13 @@ joindir=$4  # Directory where pair-joined fastq files need to end up
 genome=$5   # Genome to align against (=fasta file), already indexed by BWA
 max_depth=$6 # Maximum depth to pileup
 min_base_quality=$7 # Minimum base quality for pileup
-num_cores=$8
+subsample_for_stats=$8 # Subsample the raw SNP file to this amount to get genotyping stats
+minDP=$9
+maxDP=${10}
+min_maf=${11}   # Minimum minor allele freq to keep a site
+max_missing=${12} # Max fraction missing to keep a site
+max_het=${13} # Max p% heterozygous to keep a site
+num_cores=${14}
 
 # Relevant folders
 bamdir=$workdir/2a_alignments
@@ -30,6 +36,9 @@ if [ ! -e $snpdir ]; then mkdir $snpdir; fi
 conda_bwa=bwa-0.7.17
 conda_bcftools=bcftools-1.9
 conda_samtools=samtools-1.16.1
+conda_tassel5=tassel-5.2.89
+conda_vcftools=vcftools-0.1.16
+TASSEL5="run_pipeline.pl -Xms10g -Xmx40g" # shortcut for running TASSEL
 
 # Load functions required to be able to activate conda environments within scripts.
 . $(conda info --root)/etc/profile.d/conda.sh   # Loads the functions required to activate conda; KEEP THIS COMMAND UNCOMMENTED
@@ -74,33 +83,111 @@ conda_samtools=samtools-1.16.1
 # # #            -l /TJNAS01/CCX/Project/Variation/X101SC19121988-Z01_an100biqi_jy/F019_part2_merge_part1/SNP/01.split/Chenopodium_quinoa_split_0
 # # #    reference=file:///TJPROJ6/CCX/DataBase/Chenopodium_quinoa/quinoa.kazusa.or.jp/Cqu_r1.0.fasta
 
+# conda activate $conda_bcftools
 
 
 # bcftools mpileup is still a single-core process, apparently, so split by chromosome to be able to do parallel processing
 
-# Get chromosomes & contigs from genome index
-chroms=`cut -f1 $genome.fai | grep "^Cq"`
-contigs=`cut -f1 $genome.fai | grep -v "^Cq" | tr '\n' ',' | sed -r -e "s/,$//"` # Join contigs with commas and remove terminal comma
+# # Get chromosomes & contigs from genome index
+# chroms=`cut -f1 $genome.fai | grep "^Cq"`
+# contigs=`cut -f1 $genome.fai | grep -v "^Cq" | tr '\n' ',' | sed -r -e "s/,$//"` # Join contigs with commas and remove terminal comma
+# 
+# ## Make commands
+# commands=$workdir/2b_commands.txt
+# echo "" > $commands # Clear out from previous attempts
+# for chrom in $contigs $chroms ; do
+#     # determine output name
+#     if [[ "$chrom" == *"Contig"* ]] ; then
+#         name="contigs"
+#     else
+#         name=$chrom
+#     fi
+#     
+#     # Record command for later parallel processing
+#     echo "bcftools mpileup -d $max_depth -f "$genome" -r $chrom -Q $min_base_quality --output-type u --skip-indels --annotate FORMAT/AD,FORMAT/DP $bamdir/*.bam | " \
+#         "bcftools call --multiallelic-caller --skip-variants indels --output $snpdir/2b_$name.raw.bcf --output-type b --variants-only " >> $commands
+# done
+# 
+# # Run in parallel
+# cat $commands | parallel --progress
 
-## Make commands
-commands=$workdir/2b_commands.txt
-echo "" > $commands # Clear out from previous attempts
-for chrom in $contigs $chroms ; do
-    # determine output name
-    if [[ "$chrom" == *"Contig"* ]] ; then
-        name="contigs"
-    else
-        name=$chrom
-    fi
-    
-    # Record command for later parallel processing
-    echo "bcftools mpileup -d $max_depth -f "$genome" -r $chrom -Q $min_base_quality --output-type u --skip-indels --annotate FORMAT/AD,FORMAT/DP $bamdir/*.bam | " \
-        "bcftools call --multiallelic-caller --skip-variants indels --output $snpdir/2b_$name.raw.bcf --output-type b --variants-only " >> $commands
-done
 
-# Run in parallel
+# # Concatenate into a single file, chromosomes before contigs (like in genome)
+# bcftools concat -o $workdir/2b_snps.raw.bcf --output-type b --threads $num_cores $snpdir/2b_Cq*.raw.bcf $snpdir/2b_contigs.raw.bcf 
+# bcftools index $workdir/2b_snps.raw.bcf
+
+
+###########
+# Filtering
+###########
+
 conda activate $conda_bcftools
-cat $commands | parallel --progress
+
+# # # # # # Count how many sites in total (can get this from index?) - DEPRECATED
+# # # # # bcftools index --stats $workdir/2b_snps.raw.bcf > $workdir/2b_snps.raw.stats.txt
+# # # # # Rscript -e "counts=read.delim('$workdir/2b_snps.raw.stats.txt')[,3]; cat('Total',sum(counts),'SNPs in raw genotype file')"
+
+# # # # # # Take a random sample of X sites to run stats on - DEPRECATED
+# # # # # # bcftools view $workdir/2b_snps.raw.bcf | grep -v "^#" | cut -f 1-2 | gzip > $workdir/2b_snps.raw.sites.txt.gz
+# # # # # # Rscript -e "x=read.delim('$workdir/2b_snps.raw.sites.txt.gz'); set.seed(1); tokeep = sort(sample(1:nrow(x), replace=FALSE, size=$subsample_for_stats))" \
+# # # # # #     -e "write.table(x[tokeep,], file='$workdir/2c_snps.raw.subset.sites.txt', row.names=FALSE, col.names=FALSE, sep='\t', quote=FALSE)"  # Random subsample and write out new sites
+# # # # # # bcftools filter --regions-file $workdir/2c_snps.raw.subset.sites.txt --output-type z -o $workdir/2c_snps.raw.subset.vcf.gz $workdir/2b_snps.raw.bcf
+# # # # # # bcftools index $workdir/2c_snps.raw.subset.vcf.gz
+
+# # Convert to VCF so TASSEL & vcftools can read it
+# bcftools view  --output-type z -o $workdir/2c_snps.raw.vcf.gz $workdir/2b_snps.raw.bcf
+
+# Function to generate all the stats and data for plotting diagnostics; arguments are input gzipped VCF file and output plot PNG
+# NOTE: Resuting plot should be used to adjust the filter parameters in the master 0_RunPipeline.sh script
+plot_diagnostics () {
+    # Define variables
+    input=$1
+    statdir=$1.data
+    outfile=$2
+    if [ ! -e $statdir ]; then mkdir $statdir; fi
+    
+    # VCF tools depth summaries
+    conda activate $conda_vcftools
+    vcftools --gzvcf $input  --site-mean-depth --stdout > $statdir/site_depth.txt
+    vcftools --gzvcf $input  --geno-depth --stdout | tail -n+2 | cut -f 3- | pigz > $statdir/geno_depth.txt.gz  # skip header and 1st 2 columns so is just depth info
+
+    # TASSEL genotype and taxa summaries
+    conda activate $conda_tassel5
+    $TASSEL5 -SortGenotypeFilePlugin -inputFile $workdir/2c_snps.raw.vcf.gz -outputFile $statdir/sorted.vcf.gz
+    $TASSEL5 -vcf $statdir/sorted.vcf.gz -genotypeSummary site -export $statdir/sitesummary.txt
+    $TASSEL5 -vcf $statdir/sorted.vcf.gz -genotypeSummary taxa -export $statdir/taxasummary.txt
+    
+    # Plot diagnostics
+    Rscript $scriptdir/2c_PlotGenoSummary.r --depthfile $statdir/site_depth.txt --genodepth $statdir/geno_depth.txt.gz \
+        --sitefile $statdir/sitesummary.txt --taxafile $statdir/taxasummary.txt \
+        --max-datapoints 10000 -o $outfile
+}
+
+
+# # Filter step 1 - Genotype depth (but also getting other stats to compare)
+# plot_diagnostics $workdir/2c_snps.raw.vcf.gz $workdir/2c_summary_plots.raw.png
+
+
+# # Filter genotypes based on genotype depth first
+# conda activate $conda_vcftools
+# vcftools --gzvcf $workdir/2c_snps.raw.vcf.gz  --minDP $minDP --maxDP $maxDP --recode --stdout | pigz > $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz
+
+
+# # Filter step 2 - MAF, missingness, hets, etc.
+# plot_diagnostics $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz $workdir/2d_summary_plots.genodepth_${minDP}_${maxDP}.png
+
+
+# # Filter based on diagnostic plots
+# statdir=$workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz.data
+# Rscript $scriptdir/2d_GetFilterLists.r --sitefile $statdir/sitesummary.txt --taxafile $statdir/taxasummary.txt --depthfile $statdir/site_depth.txt \
+#     --site-min-maf $min_maf --site-max-missing $max_missing --site-max-het $max_het \
+#     --outtaxa $workdir/2d_taxa_to_keep.txt --outsites $workdir/2d_sites_to_keep.txt
+ 
+conda activate $conda_bcftools
+bcftools view --targets-file $workdir/2d_sites_to_keep.txt --samples-file $workdir/2d_taxa_to_keep.txt --output-type z --output-file $workdir/2e_snps.filtered.vcf.gz $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz
+plot_diagnostics $workdir/2e_snps.filtered.vcf.gz $workdir/2e_summary_plots.filtered.png
+
+
 
 
 
@@ -109,92 +196,6 @@ cat $commands | parallel --progress
 
 
 
-
-
-# # # # ##############
-# # # # # Basic Filtering - Depth
-# # # # ##############
-# # # # 
-# # # # # bcftools view 1b_hemp.snp_calls.bcf --output-type z > 1b_hemp.snp_calls.vcf.gz
-# # # # # 
-# # # # # # Get reports
-# # # # # $TASSEL5 -SortGenotypeFilePlugin -inputFile 1b_hemp.snp_calls.vcf.gz -outputFile 1b_hemp.snp_calls.sorted.vcf.gz
-# # # # # $TASSEL5 -vcf 1b_hemp.snp_calls.sorted.vcf.gz -genotypeSummary site -export $filtdir/1c_sitesummary.txt
-# # # # # $TASSEL5 -vcf 1b_hemp.snp_calls.sorted.vcf.gz -genotypeSummary taxa -export $filtdir/1c_taxasummary.txt
-# # # # # vcftools --gzvcf 1b_hemp.snp_calls.sorted.vcf.gz  --site-depth --stdout > $filtdir/1c_site_depth.txt
-# # # # 
-# # # # # # Complicated bash one-liner to count size of predicted restriction fragments in the hemp genome
-# # # # # cat "$genome" | sed -r -e "s|^>.+|=====|" | tr -d '\n' | tr [:lower:] [:upper:] | \
-# # # # #     sed -r -e "s|(CA[CT]..)(..[AG]TG)|\1\n\2|g" -e "s|=====||g" | \
-# # # # #     awk '{print length}' > $filtdir/1c_restriction_frag_lengths.txt
-# # # # 
-# # # # # # Plot diagnostic plots from the above summary data
-# # # # # Rscript $scriptdir/1c_PlotGenoSummary.r --sitefile $filtdir/1c_sitesummary.txt --taxafile $filtdir/1c_taxasummary.txt --depthfile $filtdir/1c_site_depth.txt \
-# # # # #     --restriction-frags $filtdir/1c_restriction_frag_lengths.txt --max-datapoints 10000 -o $filtdir/1c_summary_plots.png
-# # # # 
-# # # # 
-# # # # # Hmm...based on number of restriction fragments and read depth, I'd expect a true mean depth of single-copy DNA around 5, but actual cluster seems around 100. 
-# # # # #   (Ignoring the cluster of aligment errors that only have 1 read) Let's filter for the 100x cluster and see how it works
-# # # # 
-# # # # 
-# # # # # # Initial filter for mean depth and % presence
-# # # # # site_min_mean_depth=15
-# # # # # site_max_mean_depth=125
-# # # # # site_max_missing=0.2  # Equivalent to 80% present
-# # # # # Rscript $scriptdir/1d_GetFilterLists.r --sitefile $filtdir/1c_sitesummary.txt --taxafile $filtdir/1c_taxasummary.txt --depthfile $filtdir/1c_site_depth.txt \
-# # # # #     --site-min-mean-depth $site_min_mean_depth --site-max-mean-depth $site_max_mean_depth --site-max-missing $site_max_missing \
-# # # # #     --outtaxa $filtdir/1d_taxa_to_keep.txt --outsites $filtdir/1d_sites_to_keep.txt
-# # # # 
-# # # # # # Perform actual filtering
-# # # # # bcftools view --targets-file $filtdir/1d_sites_to_keep.txt --samples-file $filtdir/1d_taxa_to_keep.txt --output-type z --output-file $filtdir/1e_hemp_filter1.vcf.gz 1b_hemp.snp_calls.bcf 
-# # # # 
-# # # # 
-# # # # 
-# # # # # Below for backup purposes
-# # # # ##############
-# # # # # Final Filtering - Allele frequency and heterozygosity
-# # # # ##############
-# # # # 
-# # # # 
-# # # # 
-# # # # # # Run post-filter diagnostic plots (really should make this step its own function or subscript or something)
-# # # # # $TASSEL5 -SortGenotypeFilePlugin -inputFile $filtdir/1e_hemp_filter1.vcf.gz -outputFile $filtdir/1e_hemp_filter1.sorted.vcf.gz
-# # # # # $TASSEL5 -vcf $filtdir/1e_hemp_filter1.sorted.vcf.gz -genotypeSummary site -export $filtdir/1e_sitesummary.filter1.txt
-# # # # # $TASSEL5 -vcf $filtdir/1e_hemp_filter1.sorted.vcf.gz -genotypeSummary taxa -export $filtdir/1e_taxasummary.filter1.txt
-# # # # # vcftools --gzvcf $filtdir/1e_hemp_filter1.sorted.vcf.gz  --site-depth --stdout > $filtdir/1e_site_depth.filter1.txt
-# # # # # 
-# # # # # # Plot 
-# # # # # Rscript $scriptdir/1c_PlotGenoSummary.r --sitefile $filtdir/1e_sitesummary.filter1.txt --taxafile $filtdir/1e_taxasummary.filter1.txt --depthfile $filtdir/1e_site_depth.filter1.txt \
-# # # # #    --restriction-frags $filtdir/1c_restriction_frag_lengths.txt --max-datapoints 10000 -o $filtdir/1e_hemp_filter1.summary_plots.png
-# # # # # 
-# # # # # 
-# # # # #     
-# # # # # # # Second round of filtering
-# # # # # site_max_het=0.1
-# # # # # site_min_maf=0.025
-# # # # # Rscript $scriptdir/1d_GetFilterLists.r --sitefile $filtdir/1e_sitesummary.filter1.txt --taxafile $filtdir/1e_taxasummary.filter1.txt --depthfile $filtdir/1e_site_depth.filter1.txt \
-# # # # #     --site-max-het $site_max_het --site-min-maf $site_min_maf \
-# # # # #     --outtaxa $filtdir/1f_taxa_to_keep.filt2.txt --outsites $filtdir/1f_sites_to_keep.filt2.txt
-# # # # # 
-# # # # # # Perform actual filtering
-# # # # # bcftools view --targets-file $filtdir/1f_sites_to_keep.filt2.txt --samples-file $filtdir/1f_taxa_to_keep.filt2.txt --output-type z --output-file $filtdir/1g_hemp_filter2.vcf.gz $filtdir/1e_hemp_filter1.vcf.gz
-# # # # # 
-# # # # # 
-# # # # # # # Final post-filter diagnostic plots (mostly as a sanity check)
-# # # # # $TASSEL5 -SortGenotypeFilePlugin -inputFile $filtdir/1g_hemp_filter2.vcf.gz -outputFile $filtdir/1g_hemp_filter2.sorted.vcf.gz
-# # # # # $TASSEL5 -vcf $filtdir/1g_hemp_filter2.sorted.vcf.gz -genotypeSummary site -export $filtdir/1g_sitesummary.filter2.txt
-# # # # # $TASSEL5 -vcf $filtdir/1g_hemp_filter2.sorted.vcf.gz -genotypeSummary taxa -export $filtdir/1g_taxasummary.filter2.txt
-# # # # # vcftools --gzvcf $filtdir/1g_hemp_filter2.sorted.vcf.gz  --site-depth --stdout > $filtdir/1g_site_depth.filter2.txt
-# # # # # 
-# # # # # # Plot 
-# # # # # Rscript $scriptdir/1c_PlotGenoSummary.r --sitefile $filtdir/1g_sitesummary.filter2.txt --taxafile $filtdir/1g_taxasummary.filter2.txt --depthfile $filtdir/1g_site_depth.filter2.txt \
-# # # # #     --restriction-frags $filtdir/1c_restriction_frag_lengths.txt --max-datapoints 10000 -o $filtdir/1g_hemp_filter2.summary_plots.png
-# # # # # 
-# # # # # 
-# # # # # # Copy filtered genotypes back to main directory
-# # # # # cp $filtdir/1g_hemp_filter2.sorted.vcf.gz ./1g_hemp_filtered.sorted.vcf.gz
-# # # # 
-# # # # 
 # # # # 
 # # # # 
 # # # # # ##############
@@ -206,26 +207,3 @@ cat $commands | parallel --progress
 # # # # # mv 1g_hemp_filtered.sorted.tre.txt 1g_hemp_filtered.sorted.tre
 # # # # 
 # # # # 
-# # # # # ##############
-# # # # # # Genomic prediction
-# # # # # ##############
-# # # # # 
-# # # # # # Rename samples to match phenotype info (Tried with 'bcftools reheader', but it did the compression wrong somehow)
-# # # # # source=1g_hemp_filtered.sorted.vcf.gz
-# # # # # newfile=1h_hemp_filtered.sorted.renamed.vcf
-# # # # # zcat $source | grep "^##" > $newfile   # Metadata lines
-# # # # # zcat $source | grep "^#CHROM" | sed -r "s|1_bams_sorted/P.-HDGS-([0-9]+).aligned.sorted.bam|HDGS_\1|g" >> $newfile  # Header line
-# # # # # zcat $source | grep -v "^#" >> $newfile   # Genotypes
-# # # # # gzip $newfile
-# # # # # 
-# # # # # # Put phenotypes in TASSEL format; also do sqrt and log transformations, just in case
-# # # # # Rscript $scriptdir/1i_FormatPhenosForTassel.r -i $hplc_results -o 1i_hdgs_phenos --log --sqrt
-# # # # # 
-# # # # # # Run genomic prediction with TASSEL
-# # # # # $TASSEL5 -fork1 -vcf 1h_hemp_filtered.sorted.renamed.vcf.gz -ck -fork2 -t 1i_hdgs_phenos.tassel.txt -combine3 -input1 -input2 \
-# # # # #     -GenomicSelectionPlugin -doCV true -kFolds 10 -nIter 1000 -endPlugin -export 1j_gs_results.txt
-# # # # #     
-# # # # # # Graph results as violin plots
-# # # # # Rscript $scriptdir/1k_PlotPredictionAccuracy.r -i 1j_gs_results.txt -o 1k_gs_results
-# # # # # 
-# # # # # # Not great, unfortunately
