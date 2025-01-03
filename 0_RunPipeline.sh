@@ -51,7 +51,9 @@ minDP=5  # Minimum genotype depth to keep a genotype call
 maxDP=200 # Maximum genotype depth to keep a genotype call
 min_maf=0.05   # Minimum minor allele freq to keep a site
 max_missing=0.5 # Max fraction missing to keep a site
-max_het=0.25 # Max p% heterozygous to keep a site
+max_het=0.10 # Max % heterozygous to keep a site
+max_mean_depth=40 # Max mean depth per site (to help remove pileups from paralogs)
 bash $scriptdir/2_CallSnps.sh $scriptdir $snpdir $trimdir $joindir $genome $max_depth $min_base_quality $subsample_for_stats \
-    $minDP $maxDP $min_maf $max_missing $max_het $num_cores
-
+    $minDP $maxDP $min_maf $max_missing $max_het $max_mean_depth $num_cores
+# TODO: Depth may be relying on same order of inputs, which may not be true after TASSEL sorting. Fix and rerun
+# TODO: More stringent depth filter? Seem like some paralogs maybe slipping through. Also odd bump on MAF, and some taxa too much missing. Remove them?

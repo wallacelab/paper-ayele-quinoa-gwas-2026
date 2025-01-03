@@ -16,7 +16,8 @@ maxDP=${10}
 min_maf=${11}   # Minimum minor allele freq to keep a site
 max_missing=${12} # Max fraction missing to keep a site
 max_het=${13} # Max p% heterozygous to keep a site
-num_cores=${14}
+max_mean_depth=${14} # Max mean depth per site (to help remove pileups from paralogs)
+num_cores=${15}
 
 # Relevant folders
 bamdir=$workdir/2a_alignments
@@ -146,16 +147,16 @@ plot_diagnostics () {
     outfile=$2
     if [ ! -e $statdir ]; then mkdir $statdir; fi
     
-    # VCF tools depth summaries
-    conda activate $conda_vcftools
-    vcftools --gzvcf $input  --site-mean-depth --stdout > $statdir/site_depth.txt
-    vcftools --gzvcf $input  --geno-depth --stdout | tail -n+2 | cut -f 3- | pigz > $statdir/geno_depth.txt.gz  # skip header and 1st 2 columns so is just depth info
-
     # TASSEL genotype and taxa summaries
     conda activate $conda_tassel5
-    $TASSEL5 -SortGenotypeFilePlugin -inputFile $workdir/2c_snps.raw.vcf.gz -outputFile $statdir/sorted.vcf.gz
+    $TASSEL5 -SortGenotypeFilePlugin -inputFile $input -outputFile $statdir/sorted.vcf.gz
     $TASSEL5 -vcf $statdir/sorted.vcf.gz -genotypeSummary site -export $statdir/sitesummary.txt
     $TASSEL5 -vcf $statdir/sorted.vcf.gz -genotypeSummary taxa -export $statdir/taxasummary.txt
+    
+    # VCF tools depth summaries
+    conda activate $conda_vcftools
+    vcftools --gzvcf $statdir/sorted.vcf.gz  --site-mean-depth --stdout > $statdir/site_depth.txt
+    vcftools --gzvcf $statdir/sorted.vcf.gz  --geno-depth --stdout | tail -n+2 | cut -f 3- | pigz > $statdir/geno_depth.txt.gz  # skip header and 1st 2 columns so is just depth info  
     
     # Plot diagnostics
     Rscript $scriptdir/2c_PlotGenoSummary.r --depthfile $statdir/site_depth.txt --genodepth $statdir/geno_depth.txt.gz \
@@ -164,27 +165,31 @@ plot_diagnostics () {
 }
 
 
-# # Filter step 1 - Genotype depth (but also getting other stats to compare)
-# plot_diagnostics $workdir/2c_snps.raw.vcf.gz $workdir/2c_summary_plots.raw.png
+# Filter step 1 - Genotype depth (but also getting other stats to compare)
+plot_diagnostics $workdir/2c_snps.raw.vcf.gz $workdir/2c_summary_plots.raw.png
 
 
-# # Filter genotypes based on genotype depth first
-# conda activate $conda_vcftools
-# vcftools --gzvcf $workdir/2c_snps.raw.vcf.gz  --minDP $minDP --maxDP $maxDP --recode --stdout | pigz > $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz
+# Filter genotypes based on genotype depth first
+conda activate $conda_vcftools
+vcftools --gzvcf $workdir/2c_snps.raw.vcf.gz  --minDP $minDP --maxDP $maxDP --recode --stdout | pigz > $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz
 
 
-# # Filter step 2 - MAF, missingness, hets, etc.
-# plot_diagnostics $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz $workdir/2d_summary_plots.genodepth_${minDP}_${maxDP}.png
+# Filter step 2 - MAF, missingness, hets, etc.
+plot_diagnostics $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz $workdir/2d_summary_plots.genodepth_${minDP}_${maxDP}.png
 
 
-# # Filter based on diagnostic plots
-# statdir=$workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz.data
-# Rscript $scriptdir/2d_GetFilterLists.r --sitefile $statdir/sitesummary.txt --taxafile $statdir/taxasummary.txt --depthfile $statdir/site_depth.txt \
-#     --site-min-maf $min_maf --site-max-missing $max_missing --site-max-het $max_het \
-#     --outtaxa $workdir/2d_taxa_to_keep.txt --outsites $workdir/2d_sites_to_keep.txt
+# Filter based on diagnostic plots
+statdir=$workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz.data
+Rscript $scriptdir/2d_GetFilterLists.r --sitefile $statdir/sitesummary.txt --taxafile $statdir/taxasummary.txt --depthfile $statdir/site_depth.txt \
+    --site-min-maf $min_maf --site-max-missing $max_missing --site-max-het $max_het --site-max-mean-depth $max_mean_depth \
+    --outtaxa $workdir/2d_taxa_to_keep.txt --outsites $workdir/2d_sites_to_keep.txt
+
+# TASSEL apparently capitalizes the chromosome names, so need to fix that
+cat $workdir/2d_sites_to_keep.txt | sed -r -e "s|^CQ|Cq|" -e "s|^CONTIG|Contig|" > $workdir/2d_sites_to_keep.fix_case.txt
  
-conda activate $conda_bcftools
-bcftools view --targets-file $workdir/2d_sites_to_keep.txt --samples-file $workdir/2d_taxa_to_keep.txt --output-type z --output-file $workdir/2e_snps.filtered.vcf.gz $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz
+# conda activate $conda_bcftools
+bcftools view --targets-file $workdir/2d_sites_to_keep.fix_case.txt --samples-file $workdir/2d_taxa_to_keep.txt --output-type z --threads $num_cores \
+    --output-file $workdir/2e_snps.filtered.vcf.gz $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz
 plot_diagnostics $workdir/2e_snps.filtered.vcf.gz $workdir/2e_summary_plots.filtered.png
 
 
