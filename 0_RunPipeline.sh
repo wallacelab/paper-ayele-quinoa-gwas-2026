@@ -16,6 +16,7 @@
 
 # Set up global variables
 genome=/home/jgwall/Projects/0_RawData/Genomes/QuinoaGenome/Cquinoa_QQ74_v2.fasta.gz  # Genome
+pub_diversity=/home/jgwall/Projects/0_RawData/Diversity/Quinoa/Cq_allpseudo_biallelic_minDP5_MaxMissing0.8_MAF0.01.Cq3Bsamples.variantsonly.vcf.gz
 srcdir=/home/jgwall/Projects/0_RawData/Sequencing/2024_12_13_Addisu_quinoa_GBS/01.rawdata/
 adapterdir="/home/jgwall/Software/Python/miniconda3/envs/trimmomatic-0.39/share/trimmomatic-0.39-2/adapters/" # Location of trimmomatic adapters
 rawdir=0_raw_data
@@ -57,6 +58,4 @@ highqual_max_missing_site=0.2 # Max missing (sites) for high quality filters
 highqual_max_missing_taxon=0.25 # Max missing (taxon) for high quality filters
 highqual_min_mean_depth=20 # Minimum mean readdepth for high quality filters
 bash $scriptdir/2_CallSnps.sh $scriptdir $snpdir $trimdir $joindir $genome $max_depth $min_base_quality $subsample_for_stats \
-    $minDP $maxDP $min_maf $max_missing $max_het $max_mean_depth $highqual_max_missing_site $highqual_max_missing_taxon $highqual_min_mean_depth $num_cores
-# TODO: Depth may be relying on same order of inputs, which may not be true after TASSEL sorting. Fix and rerun
-# TODO: More stringent depth filter? Seem like some paralogs maybe slipping through. Also odd bump on MAF, and some taxa too much missing. Remove them?
+    $minDP $maxDP $min_maf $max_missing $max_het $max_mean_depth $highqual_max_missing_site $highqual_max_missing_taxon $highqual_min_mean_depth $pub_diversity $num_cores

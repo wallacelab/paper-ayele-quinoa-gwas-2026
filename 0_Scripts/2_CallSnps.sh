@@ -20,7 +20,8 @@ max_mean_depth=${14} # Max mean depth per site (to help remove pileups from para
 highqual_max_missing_site=${15} # Max missing (sites) for high quality filters
 highqual_max_missing_taxon=${16} # Max missing (taxon) for high quality filters
 highqual_min_mean_depth=${17} # Minimum mean readdepth for high quality filters
-num_cores=${18}
+pub_diversity=${18} # VCF file of published SNP diversity to compare against.
+num_cores=${19}
 
 # Relevant folders
 bamdir=$workdir/2a_alignments
@@ -205,8 +206,35 @@ plot_diagnostics () {
 # # conda activate $conda_bcftools
 # bcftools view --targets-file $workdir/2f_sites_to_keep.highqual.fix_case.txt --samples-file $workdir/2f_taxa_to_keep.highqual.txt --output-type z --threads $num_cores \
 #     --output-file $workdir/2f_snps.filtered.highqual.vcf.gz $workdir/2e_snps.filtered.vcf.gz
-plot_diagnostics $workdir/2f_snps.filtered.highqual.vcf.gz $workdir/2f_summary_plots.filtered.highqual.png
+# plot_diagnostics $workdir/2f_snps.filtered.highqual.vcf.gz $workdir/2f_summary_plots.filtered.highqual.png
 
+
+
+################
+# Compare to published SNPs
+################
+
+# # Get diagnostic from published SNPs
+# cp $pub_diversity $workdir/2g_published.vcf.gz
+# plot_diagnostics $workdir/2g_published.vcf.gz $workdir/2g_published.png
+# 
+# # Helper function to extract site data from VCF; arguments are input gzipped VCF and output text file
+# extract_sites () {
+#     infile=$1
+#     outfile=$2
+#     zcat $infile | grep -v "^#" | cut -f1-2 > $outfile
+# }
+ 
+ 
+# # Get SNP sites to see overlap
+# extract_sites $workdir/2g_published.vcf.gz $workdir/2h_sites.published.txt
+# extract_sites $workdir/2c_snps.raw.vcf.gz $workdir/2h_sites.raw.txt
+# extract_sites $workdir/2e_snps.filtered.vcf.gz $workdir/2h_sites.filtered.txt
+# extract_sites $workdir/2f_snps.filtered.highqual.vcf.gz $workdir/2h_sites.highqual.txt
+Rscript $scriptdir/2h_PlotSiteOverlaps.r --published $workdir/2h_sites.published.txt -i $workdir/2h_sites.raw.txt $workdir/2h_sites.filtered.txt $workdir/2h_sites.highqual.txt \
+    --names Raw Filtered High-Quality -o $workdir/2h_sites
+
+# TODO - Redo the above so it's just comparing any 2 datasets with names
 
 
 
