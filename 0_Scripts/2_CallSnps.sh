@@ -17,7 +17,10 @@ min_maf=${11}   # Minimum minor allele freq to keep a site
 max_missing=${12} # Max fraction missing to keep a site
 max_het=${13} # Max p% heterozygous to keep a site
 max_mean_depth=${14} # Max mean depth per site (to help remove pileups from paralogs)
-num_cores=${15}
+highqual_max_missing_site=${15} # Max missing (sites) for high quality filters
+highqual_max_missing_taxon=${16} # Max missing (taxon) for high quality filters
+highqual_min_mean_depth=${17} # Minimum mean readdepth for high quality filters
+num_cores=${18}
 
 # Relevant folders
 bamdir=$workdir/2a_alignments
@@ -165,33 +168,44 @@ plot_diagnostics () {
 }
 
 
-# Filter step 1 - Genotype depth (but also getting other stats to compare)
-plot_diagnostics $workdir/2c_snps.raw.vcf.gz $workdir/2c_summary_plots.raw.png
-
-
-# Filter genotypes based on genotype depth first
-conda activate $conda_vcftools
-vcftools --gzvcf $workdir/2c_snps.raw.vcf.gz  --minDP $minDP --maxDP $maxDP --recode --stdout | pigz > $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz
-
-
-# Filter step 2 - MAF, missingness, hets, etc.
-plot_diagnostics $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz $workdir/2d_summary_plots.genodepth_${minDP}_${maxDP}.png
-
-
-# Filter based on diagnostic plots
-statdir=$workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz.data
-Rscript $scriptdir/2d_GetFilterLists.r --sitefile $statdir/sitesummary.txt --taxafile $statdir/taxasummary.txt --depthfile $statdir/site_depth.txt \
-    --site-min-maf $min_maf --site-max-missing $max_missing --site-max-het $max_het --site-max-mean-depth $max_mean_depth \
-    --outtaxa $workdir/2d_taxa_to_keep.txt --outsites $workdir/2d_sites_to_keep.txt
-
-# TASSEL apparently capitalizes the chromosome names, so need to fix that
-cat $workdir/2d_sites_to_keep.txt | sed -r -e "s|^CQ|Cq|" -e "s|^CONTIG|Contig|" > $workdir/2d_sites_to_keep.fix_case.txt
+# # Filter step 1 - Genotype depth (but also getting other stats to compare)
+# plot_diagnostics $workdir/2c_snps.raw.vcf.gz $workdir/2c_summary_plots.raw.png
+# 
+# # Filter genotypes based on genotype depth first
+# conda activate $conda_vcftools
+# vcftools --gzvcf $workdir/2c_snps.raw.vcf.gz  --minDP $minDP --maxDP $maxDP --recode --stdout | pigz > $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz
+# plot_diagnostics $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz $workdir/2d_summary_plots.genodepth_${minDP}_${maxDP}.png 
  
-# conda activate $conda_bcftools
-bcftools view --targets-file $workdir/2d_sites_to_keep.fix_case.txt --samples-file $workdir/2d_taxa_to_keep.txt --output-type z --threads $num_cores \
-    --output-file $workdir/2e_snps.filtered.vcf.gz $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz
-plot_diagnostics $workdir/2e_snps.filtered.vcf.gz $workdir/2e_summary_plots.filtered.png
 
+# # Filter step 2 - MAF, missingness, hets, etc.
+# # Filter based on diagnostic plots
+# statdir=$workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz.data
+# Rscript $scriptdir/2d_GetFilterLists.r --sitefile $statdir/sitesummary.txt --taxafile $statdir/taxasummary.txt --depthfile $statdir/site_depth.txt \
+#     --site-min-maf $min_maf --site-max-missing $max_missing --site-max-het $max_het --site-max-mean-depth $max_mean_depth \
+#     --outtaxa $workdir/2d_taxa_to_keep.txt --outsites $workdir/2d_sites_to_keep.txt
+# 
+# # TASSEL apparently capitalizes the chromosome names, so need to fix that
+# cat $workdir/2d_sites_to_keep.txt | sed -r -e "s|^CQ|Cq|" -e "s|^CONTIG|Contig|" > $workdir/2d_sites_to_keep.fix_case.txt
+#  
+# # conda activate $conda_bcftools
+# bcftools view --targets-file $workdir/2d_sites_to_keep.fix_case.txt --samples-file $workdir/2d_taxa_to_keep.txt --output-type z --threads $num_cores \
+#     --output-file $workdir/2e_snps.filtered.vcf.gz $workdir/2d_snps.genodepth_${minDP}_${maxDP}.vcf.gz
+# plot_diagnostics $workdir/2e_snps.filtered.vcf.gz $workdir/2e_summary_plots.filtered.png
+
+
+# # Filter step 3 - Higher quality (= more stringent) filtering. Not sure if will need
+# statdir=$workdir/2e_snps.filtered.vcf.gz.data
+# Rscript $scriptdir/2d_GetFilterLists.r --sitefile $statdir/sitesummary.txt --taxafile $statdir/taxasummary.txt --depthfile $statdir/site_depth.txt \
+#     --site-max-missing $highqual_max_missing_site --taxa-max-missing $highqual_max_missing_taxon --site-min-mean-depth $highqual_min_mean_depth \
+#     --outtaxa $workdir/2f_taxa_to_keep.highqual.txt --outsites $workdir/2f_sites_to_keep.highqual.txt
+# 
+# # TASSEL apparently capitalizes the chromosome names, so need to fix that
+# cat $workdir/2f_sites_to_keep.highqual.txt | sed -r -e "s|^CQ|Cq|" -e "s|^CONTIG|Contig|" > $workdir/2f_sites_to_keep.highqual.fix_case.txt
+#  
+# # conda activate $conda_bcftools
+# bcftools view --targets-file $workdir/2f_sites_to_keep.highqual.fix_case.txt --samples-file $workdir/2f_taxa_to_keep.highqual.txt --output-type z --threads $num_cores \
+#     --output-file $workdir/2f_snps.filtered.highqual.vcf.gz $workdir/2e_snps.filtered.vcf.gz
+plot_diagnostics $workdir/2f_snps.filtered.highqual.vcf.gz $workdir/2f_summary_plots.filtered.highqual.png
 
 
 

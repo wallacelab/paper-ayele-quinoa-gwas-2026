@@ -46,13 +46,13 @@ if(!is.null(args$depthfile)){
   
   # Depth plots in various formats
   depth_raw = qplot(1:length(depthvals.sort), depthvals.sort, color=I('darkgoldenrod')) +
-    labs(title = "Sites - Read Depth", x="Site # (sorted)", y="Read Depth") 
+    labs(title = "Sites - Mean Read Depth", x="Site # (sorted)", y="Read Depth") 
   
   depth_log = qplot(1:length(depthvals.sort), log10(depthvals.sort), color=I('darkgoldenrod4')) +
-    labs(title = "Sites - Read Depth (Log scale)", x="Site # (sorted)", y="Log10 Read Depth") 
+    labs(title = "Sites - Mean Read Depth (Log scale)", x="Site # (sorted)", y="Log10 Read Depth") 
   
   depth_hist = qplot(log10(depthvals.sort), fill=I('khaki4'), geom="histogram", bins=50) +
-    labs(title = "Sites - Read Depth (Log scale)", x="Log10 Read Depth", y="# Sites") 
+    labs(title = "Sites - Mean Read Depth (Log scale)", x="Log10 Read Depth", y="# Sites") 
   
   plots = c(plots, list(depth_raw, depth_log, depth_hist))
   
