@@ -21,7 +21,8 @@ highqual_max_missing_site=${15} # Max missing (sites) for high quality filters
 highqual_max_missing_taxon=${16} # Max missing (taxon) for high quality filters
 highqual_min_mean_depth=${17} # Minimum mean readdepth for high quality filters
 pub_diversity=${18} # VCF file of published SNP diversity to compare against.
-num_cores=${19}
+company_diversity=${19} # VCF file of SNPs called by the company (CD genomics)
+num_cores=${20}
 
 # Relevant folders
 bamdir=$workdir/2a_alignments
@@ -211,19 +212,33 @@ plot_diagnostics () {
 
 
 ################
-# Compare to published SNPs
+# Compare to published & company-generated SNPs
 ################
 
 # # Get diagnostic from published SNPs
 # cp $pub_diversity $workdir/2g_published.vcf.gz
 # plot_diagnostics $workdir/2g_published.vcf.gz $workdir/2g_published.png
-# 
-# # Helper function to extract site data from VCF; arguments are input gzipped VCF and output text file
-# extract_sites () {
-#     infile=$1
-#     outfile=$2
-#     zcat $infile | grep -v "^#" | cut -f1-2 > $outfile
-# }
+
+# Get diagnostic from company SNPs
+# cp $company_diversity $workdir/2g_company.vcf.gz
+# plot_diagnostics $workdir/2g_company.vcf.gz $workdir/2g_company.png
+## TASSEL not handling depth right when sorting. Won't be filtering these, so just do manually
+# conda activate $conda_vcftools
+# statdir=$workdir/2g_company.vcf.gz.data
+# vcftools --gzvcf $workdir/2g_company.vcf.gz  --site-mean-depth --stdout > $statdir/site_depth.txt
+# vcftools --gzvcf $workdir/2g_company.vcf.gz  --geno-depth --stdout | tail -n+2 | cut -f 3- | pigz > $statdir/geno_depth.txt.gz  # skip header and 1st 2 columns so is just depth info  
+# ## Now plot diagnosics
+# Rscript $scriptdir/2c_PlotGenoSummary.r --depthfile $statdir/site_depth.txt --genodepth $statdir/geno_depth.txt.gz \
+#     --sitefile $statdir/sitesummary.txt --taxafile $statdir/taxasummary.txt \
+#     --max-datapoints 10000 -o $workdir/2g_company.png
+
+
+# Helper function to extract site data from VCF; arguments are input gzipped VCF and output text file
+extract_sites () {
+    infile=$1
+    outfile=$2
+    zcat $infile | grep -v "^#" | cut -f1-2 > $outfile
+}
  
  
 # # Get SNP sites to see overlap
@@ -231,20 +246,32 @@ plot_diagnostics () {
 # extract_sites $workdir/2c_snps.raw.vcf.gz $workdir/2h_sites.raw.txt
 # extract_sites $workdir/2e_snps.filtered.vcf.gz $workdir/2h_sites.filtered.txt
 # extract_sites $workdir/2f_snps.filtered.highqual.vcf.gz $workdir/2h_sites.highqual.txt
-Rscript $scriptdir/2h_PlotSiteOverlaps.r --published $workdir/2h_sites.published.txt -i $workdir/2h_sites.raw.txt $workdir/2h_sites.filtered.txt $workdir/2h_sites.highqual.txt \
-    --names Raw Filtered High-Quality -o $workdir/2h_sites
+# extract_sites $workdir/2g_company.vcf.gz $workdir/2h_sites.company.txt
 
-# TODO - Redo the above so it's just comparing any 2 datasets with names
+# # Compare to published data
+# for set in raw filtered highqual company; do
+#     Rscript $scriptdir/2h_PlotSiteOverlaps.r -i $workdir/2h_sites.published.txt $workdir/2h_sites.$set.txt --names Published $set -o $workdir/2h_site_overlap
+# done
+
+# # Compare to company data
+# for set in raw filtered highqual; do
+#     Rscript $scriptdir/2h_PlotSiteOverlaps.r -i $workdir/2h_sites.company.txt $workdir/2h_sites.$set.txt --names Company $set -o $workdir/2h_site_overlap
+# done
 
 
 
-# NOTE The newest Quinoa genome (QQ74_v2, from Rey et al 2023) did a diversity study where "only biallelic variants with minimum read depth 5, maximum missing data 20% and MAF 0.01% were retained"
+###########
+# Reformat - DEPRECATED
+##########
+
+# # # # # # Convert to hapmap and reformat chromosome names # UNFINISHED
+# # # # # conda activate $conda_tassel5
+# # # # # # $TASSEL5 -SortGenotypeFilePlugin -inputFile $workdir/2f_snps.filtered.highqual.vcf.gz -outputFile $workdir/tmp.vcf.gz
+# # # # # # $TASSEL5 -vcf $workdir/tmp.vcf.gz -export $workdir/2f_snps.filtered.highqual.hmp.txt.gz #-outputFormat hapmap
+# # # # # # # # zcat $workdir/2f_snps.filtered.highqual.hmp.txt.gz | \  # UNFINISHED
+# # # # # # # #     sed -r -e "s|2_CallSnps/2a_alignments/||g" -e "s|\.bam||g" -e "" > 2f_snps.filtered.highqual.fix_names.hmp.txt
 
 
-
-
-# # # # 
-# # # # 
 # # # # # ##############
 # # # # # # Cladogram
 # # # # # ##############

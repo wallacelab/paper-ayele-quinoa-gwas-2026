@@ -44,6 +44,7 @@ if(!is.null(args$depthfile)){
   }
   depthvals.sort = sort(depthvals) # Sort for plotting
   
+
   # Depth plots in various formats
   depth_raw = qplot(1:length(depthvals.sort), depthvals.sort, color=I('darkgoldenrod')) +
     labs(title = "Sites - Mean Read Depth", x="Site # (sorted)", y="Read Depth") 
@@ -53,8 +54,15 @@ if(!is.null(args$depthfile)){
   
   depth_hist = qplot(log10(depthvals.sort), fill=I('khaki4'), geom="histogram", bins=50) +
     labs(title = "Sites - Mean Read Depth (Log scale)", x="Log10 Read Depth", y="# Sites") 
-  
-  plots = c(plots, list(depth_raw, depth_log, depth_hist))
+    
+  # Safety check in case all depths are 0 (like VCF converted from Hapmap)
+  if(all(depthvals==0)){
+    depth_log=NULL
+    depth_hist=NULL
+  }
+    
+    plots = c(plots, list(depth_raw, depth_log, depth_hist))
+
   
 }else{
   cat("Unable to create site depth plot because missing input file\n")
@@ -82,13 +90,16 @@ if(!is.null(args$genodepth)){
   geno_depthlog = qplot(log10(genodepths), fill=I('darkorchid4'), geom="histogram", bins=50) +
     labs(title = "Genotypes - Read Depth (Log scale)", x="Log10 Read Depth", y="# Genotype Calls") 
   
+  # Safety check in case all depths are 0 (like VCF converted from Hapmap)
+  if(all(genodepths==0)){
+    geno_depthlog=NULL
+  }
+  
   plots = c(plots, list(geno_depth, geno_depthlog))
   
 }else{
   cat("Unable to create genotype depth plot because missing input file\n")
 }
-
-
 
 
 
@@ -191,6 +202,11 @@ if(!is.null(args$depthfile) && !is.null(args$sitefile)){
         labs(title = "Geno Calls - Read Depth vs Presence", subtitle="(Mean read >=1)", x="log10(Mean Depth)", y="Fraction Samples Present") +
         ylim(-0.05, 1.05)
 
+    if(all(depthvals==0)){
+      bindepth=NULL
+      bindepth_cutoff=NULL
+    }
+    
     plots = c(plots, list(bindepth, bindepth_cutoff))
 }else{
     cat("Unable to create 2D bin plot because missing either site depth or site summary files\n")

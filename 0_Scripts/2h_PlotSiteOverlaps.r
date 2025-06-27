@@ -10,39 +10,32 @@ library(VennDiagram)
 # Command-line arguments
 options(stringsAsFactors=F)
 parser=ArgumentParser()
-parser$add_argument("-i", "--infiles", nargs="*", help="Input datasets (=first 2 columns of VCF file)")
-parser$add_argument("-n", "--names", nargs="*", help="Names of input datasets")
-parser$add_argument("-p", "--published", help="Sites from published dataset")
+parser$add_argument("-i", "--infiles", nargs=2, help="Input datasets (=first 2 columns of VCF file)")
+parser$add_argument("-n", "--names", nargs=2, help="Names of input datasets")
 parser$add_argument("-o", "--outprefix", help="Output file prefix")
 args=parser$parse_args()
 # setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/2_CallSnps/')
-# args=parser$parse_args(c("-i","2h_sites.filtered.txt", "2h_sites.highqual.txt", 
-#                          "-n", "filt", "highqual",
-#                          "-p", "2h_sites.published.txt",
+# args=parser$parse_args(c("-i","2h_sites.filtered.txt", "2h_sites.published.txt",
+#                          "-n", "filt", "published",
 #                          "-o", "99_tmp"))
 
 
 # Load data
 cat("Making Venn diagram of SNP overlaps\n")
-pubdata = scan(args$published, what=character(), sep="\n")
 indata = lapply(args$infiles, scan, what=character(), sep="\n")
 names(indata) = args$names
 
 # Force case the same
-pubdata = toupper(pubdata)
 indata = lapply(indata, toupper)
 
 # Make colors
-colors = brewer.pal(length(indata)+1, "Set2")
-names(colors) = c("Published", names(indata))
+colors = c("cornflowerblue", "firebrick")
 
 # Plot
-for(myname in names(indata)){
-  mydata = list(pubdata, indata[[myname]])
-  myfills = c(colors["Published"], colors[myname])
-  outfile=paste(args$outprefix, myname, "png", sep=".")
-  title=paste("Compare", myname,"to published set")
-  venn.diagram(mydata, fill = myfills, alpha=0.5, cex=2, filename=outfile, 
-               category.names=c("Published", myname), main=title,
-               disable.logging=TRUE)
-}
+n1=names(indata)[1]
+n2=names(indata)[2]
+outfile=paste(args$outprefix, n1, n2, "png", sep=".")
+title=paste("Compare", n1,"to",n2)
+venn.diagram(indata, fill = colors, alpha=0.5, cex=2, filename=outfile, 
+             category.names=names(indata), main=title,
+             disable.logging=TRUE)
