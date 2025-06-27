@@ -39,14 +39,16 @@ conda_tassel5=tassel-5.2.89
 # Setup
 ###########
 
-# # Convert genotypes to numeric
+# # Convert genotypes to numeric & generate kinship matrix
 # conda activate $conda_tassel5
 # run_pipeline.pl -h $genos -NumericalGenotypePlugin -endPlugin -export $workdir/3a_genos.numeric.txt -exportType ReferenceProbability
+# run_pipeline.pl -h $genos -KinshipPlugin -endPlugin -export $workdir/3a_kinship.txt
+# 
 # 
 # # Extract genotype coordinates for GAPIT map file
 # echo -e "SNP\tChromosome\tPosition" > $workdir/3a_genos.map.txt
 # zcat $genos | tail -n +2 | cut -f1,3,4  >>  $workdir/3a_genos.map.txt
-
+# 
 # # Combine and check
 # Rscript $scriptdir/3a_CombineAndCheckData.r --genofile $workdir/3a_genos.numeric.txt --phenofile $phenos --outprefix $workdir/3a
 
@@ -62,8 +64,9 @@ traits=`head -n 1 $workdir/3a_phenos.csv | tr ',' '\n' | tail -n +2 | tr '"' ' '
 phenofile=$workdir/3a_phenos.csv
 genofile=$workdir/3a_genos.numeric.rds
 mapfile=$workdir/3a_genos.map.txt
+kinfile=$workdir/3a_kinship.txt
  
-# Loop over traits
+# Loop over traits - TODO - Try with both FarmCPU and with BLINK
 for trait in $traits; do
         
 # # # # #     # Set up Covariates. - Not for this analysis
@@ -82,7 +85,7 @@ for trait in $traits; do
     if [ ! -e $myresampledir ]; then mkdir $myresampledir; fi
     
     # Run permutations & resamplings
-    Rscript $scriptdir/3b_ResampleGapit.r --genofile $genofile --phenofile $phenofile --map $mapfile --trait $trait --num-pcs $num_pcs \
+    Rscript $scriptdir/3b_ResampleGapit.r --genofile $genofile --phenofile $phenofile --map $mapfile --kinshipfile $kinfile --trait $trait --num-pcs $num_pcs \
         --permdir $mypermdir --resampledir $myresampledir --num-perms $num_perms --num-resamples $num_resamples --resample-fraction $resample_fraction
 
 #     # Save actual permutation results with p-values; remove all other intermediate files

@@ -3,7 +3,7 @@
 # Run permutation and resamplings to get RMIP for FARM-CPU
 library(argparse)
 library(GAPIT3)
-options(stringsAsFactors=F)
+library(dplyr)
 
 # Arguments
 parser=ArgumentParser()
@@ -11,6 +11,7 @@ parser$add_argument("-g", "--genofile", help="Input genotype file (RDS file, num
 parser$add_argument("-p", "--phenofile", help="Input file of phenotyes")
 parser$add_argument("-t", "--trait", help="Which trait to run FamCPU on")
 parser$add_argument("-c", "--covfile", help="Input file of covariates")
+parser$add_argument("-k", "--kinshipfile", help="Input kinship matrix file")
 parser$add_argument("--covariates", nargs="*", help="Which covariates to include")
 parser$add_argument("-m", "--mapfile", help="Input GAPIT map file of genotypes")
 parser$add_argument("-q", "--num-pcs", type="integer", default="5", help="How many principal components to include")
@@ -20,15 +21,15 @@ parser$add_argument("--num-perms", type="integer", default="1", help="How many p
 parser$add_argument("--num-resamples", type="integer", default=1, help="How many resamplings to run of genotypes")
 parser$add_argument("-f", "--resample-fraction", type="double", default=0.8, help="What fraction of genotypes are included in each resampling")
 args=parser$parse_args()
-# setwd('/home/jgwall/Projects/Sorghum/Punurri_aphid_resistance/FarmCPU-RMIP-analysis-v1.2/')
-# args=parser$parse_args(c("-g","0_Inputs/281_Genotyp_Numeric.rds",
-#                          "-m","0_Inputs/Genotype.map.txt",
-#                          "-p","1_traits.phenos.csv",
-#                          "-t", "Log_D1_2019.2020",
-#                          "-c", "1_traits.covariates.csv", "--covariates", "nSpad", "Log_2019.2020_PH",
+# setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/3_GWAS/')
+# args=parser$parse_args(c("-g","3a_genos.numeric.rds",
+#                          "-m","3a_genos.map.txt",
+#                          "-p","3a_phenos.csv",
+#                          "-k", "3a_kinship.txt",
+#                          "-t", "GSW60",
 #                          "-q", "3",
-#                          "--permdir", "1b_Permutations/Log_D1_2019.2020/",
-#                          "--resampledir", "1d_Resampling/Log_D1_2019.2020/",
+#                          "--permdir", "3b_Permutations/GSW60/",
+#                          "--resampledir", "3d_Resampling/GSW60/",
 #                          "--num-perms", "2",
 #                          "--num-resamples", "2",
 #                          "-f", "0.9"
@@ -42,6 +43,11 @@ basedir=getwd()
 map = read.delim(args$mapfile)
 genos=readRDS(args$genofile)
 phenos=read.csv(args$phenofile)[,c("Taxa", args$trait)]
+kinship=read.delim(args$kinshipfile, skip=3, row.names=1, header=FALSE)
+
+# Format kinship for GAPIT
+rownames(kinship) = basename(rownames(kinship)) # Fix taxa names
+kinship = data.frame(taxa=rownames(kinship), kinship)
 
 # Find shared taxa 
 shared = intersect(genos$taxa, phenos$Taxa)
@@ -73,9 +79,20 @@ if(!is.null(args$covfile)){
 genos = subset(genos, genos$taxa %in% shared)
 phenos = subset(phenos, phenos$Taxa %in% shared)
 
-# Generate kinship matrix (stays constant)
-kinship = GAPIT.kinship.VanRaden(data.frame(genos[,-1], row.names=genos$taxa))
-kinship = data.frame(taxa=rownames(kinship), kinship)
+# Impute missing data to mean for each site (otherwise GAPIT crashes)
+#genos[is.na(genos)] = 0
+missing_to_mean = function(x){
+  x[is.na(x)] = mean(x, na.rm=TRUE)
+  return(x)
+}
+genos = genos %>%
+  mutate(across(-taxa, missing_to_mean))
+
+
+
+# # Generate kinship matrix (stays constant) - DEPRECATED
+# kinship = GAPIT3:::GAPIT.kinship.VanRaden(genos)
+# kinship = data.frame(taxa=rownames(kinship), kinship, check.names=FALSE)
 
 # Calculate number of genotypes per resample
 genos_per_resample = args$resample_fraction * nrow(genos)
@@ -98,10 +115,10 @@ for(i in 1:args$num_perms){
     to_keep = sample(1:nrow(genos.perm), replace=F, size=genos_per_resample)
     genos.perm = genos.perm[to_keep,]
     
-    # Run FarmCPU
+    # # Run FarmCPU
     results = GAPIT(Y=phenos, GD=genos.perm, GM=map, CV=covariates, KI=kinship,
           PCA.total=args$num_pcs, model=c("FarmCPU"), file.output=T)
-    
+
     # Reset to original directory
     setwd(basedir)
 }
