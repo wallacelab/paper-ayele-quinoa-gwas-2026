@@ -1,13 +1,13 @@
 #! /bin/bash
 
-# Initialize repo
-echo "# proj-quinoa-genotyping-2025" >> README.md
-git init
-git add README.md
-git commit -m "first commit"
-git branch -M main
-git remote add origin git@github.com:jgwall/proj-quinoa-genotyping-2025.git
-git push -u origin main
+# # Initialize repo
+# echo "# proj-quinoa-genotyping-2025" >> README.md
+# git init
+# git add README.md
+# git commit -m "first commit"
+# git branch -M main
+# git remote add origin git@github.com:jgwall/proj-quinoa-genotyping-2025.git
+# git push -u origin main
 
 # Add all script files
 find ./ | grep -i -e "\.sh$" -e "\.py$" -e "\.r$" | xargs -d "\n" git add
