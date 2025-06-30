@@ -4,6 +4,7 @@
 library(argparse)
 library(GAPIT3)
 library(dplyr)
+library(parallel)
 
 # Arguments
 parser=ArgumentParser()
@@ -15,8 +16,10 @@ parser$add_argument("-k", "--kinshipfile", help="Input kinship matrix file")
 parser$add_argument("--covariates", nargs="*", help="Which covariates to include")
 parser$add_argument("-m", "--mapfile", help="Input GAPIT map file of genotypes")
 parser$add_argument("-q", "--num-pcs", type="integer", default="5", help="How many principal components to include")
+parser$add_argument("--model", default="FarmCPU", help="Which GAPIT model to use")
 parser$add_argument("--permdir", help="Output directory for permutation results")
 parser$add_argument("--resampledir", help="Output directory for resampling results")
+parser$add_argument("--num-cores", type="integer", default="1", help="How many cores to run in parallel")
 parser$add_argument("--num-perms", type="integer", default="1", help="How many permutations to run of genotypes")
 parser$add_argument("--num-resamples", type="integer", default=1, help="How many resamplings to run of genotypes")
 parser$add_argument("-f", "--resample-fraction", type="double", default=0.8, help="What fraction of genotypes are included in each resampling")
@@ -30,6 +33,7 @@ args=parser$parse_args()
 #                          "-q", "3",
 #                          "--permdir", "3b_Permutations/GSW60/",
 #                          "--resampledir", "3d_Resampling/GSW60/",
+#                          "--num-cores", "4",
 #                          "--num-perms", "2",
 #                          "--num-resamples", "2",
 #                          "-f", "0.9"
@@ -97,8 +101,9 @@ genos = genos %>%
 # Calculate number of genotypes per resample
 genos_per_resample = args$resample_fraction * nrow(genos)
 
-# Run permutations
-for(i in 1:args$num_perms){
+# Run permutations to get null distribution (=when no signal present)
+#for(i in 1:args$num_perms)
+mclapply(1:args$num_perms, mc.cores=args$num_cores, FUN=function(i)  {  # Run in parallel
     cat("\n#### Running permutation",i,"####\n\n")
     set.seed(i) # Set random seed for reproducibility
     
@@ -117,16 +122,17 @@ for(i in 1:args$num_perms){
     
     # # Run FarmCPU
     results = GAPIT(Y=phenos, GD=genos.perm, GM=map, CV=covariates, KI=kinship,
-          PCA.total=args$num_pcs, model=c("FarmCPU"), file.output=T)
+          PCA.total=args$num_pcs, model=args$model, file.output=T)
 
     # Reset to original directory
     setwd(basedir)
-}
+})
 
 
 
-# Run resamples
-for(i in 1:args$num_resamples){
+# Run resamples so can calculate RMIPs
+#for(i in 1:args$num_resamples){
+mclapply(1:args$num_resamples, mc.cores=args$num_cores, FUN=function(i) {
     cat("\n#### Running resample",i,"for",args$trait,"####\n\n")
     set.seed(i) # Set random seed for reproducibility
     
@@ -141,8 +147,8 @@ for(i in 1:args$num_resamples){
     
     # Run FarmCPU
     results = GAPIT(Y=phenos, GD=subgenos, GM=map, CV=covariates, KI=kinship,
-                    PCA.total=args$num_pcs, model=c("FarmCPU"), file.output=T)
+                    PCA.total=args$num_pcs, model=args$model, file.output=T)
     
     # Reset to original directory
     setwd(basedir)
-}
+})
