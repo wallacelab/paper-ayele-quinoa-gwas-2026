@@ -3,6 +3,7 @@
 # Compile permutations and resamples to get RMIPs
 library(argparse)
 library(ggplot2)
+library(dplyr)
 options(stringsAsFactors=F)
 
 # Arguments
@@ -14,11 +15,11 @@ parser$add_argument("--rmip-cutoff", type='double', default=0.05, help="RMIP cut
 parser$add_argument("-o", "--outprefix", help="Output file prefix")
 parser$add_argument("-t", "--trait", default="unnamed trait", help="Trait name")
 args=parser$parse_args()
-# setwd('/home/jgwall/Projects/Sorghum/Punurri_aphid_resistance/FarmCPU-RMIP-analysis/')
-# args=parser$parse_args(c("-p","1b_Permutations/Log_D1_2019.2020/perm1/GAPIT.FarmCPU.Log_D1_2019.2020.GWAS.Results.csv.gz",
-#                        "1b_Permutations/Log_D1_2019.2020/perm1/GAPIT.FarmCPU.Log_D1_2019.2020.GWAS.Results.csv.gz",
-#                        "-r", "1d_Resampling/Log_D1_2019.2020/resample1/GAPIT.FarmCPU.Log_D1_2019.2020.GWAS.Results.csv.gz",
-#                        "1d_Resampling/Log_D1_2019.2020/resample1/GAPIT.FarmCPU.Log_D1_2019.2020.GWAS.Results.csv.gz",
+# setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/3_GWAS/')
+# args=parser$parse_args(c("-p","3b_Permutations.FarmCPU/GSW60/perm1/GAPIT.Association.GWAS_Results.FarmCPU.GSW60.csv.gz",
+#                        "3b_Permutations.FarmCPU/GSW60/perm2/GAPIT.Association.GWAS_Results.FarmCPU.GSW60.csv.gz",
+#                        "-r", "3d_Resampling.FarmCPU/GSW60/resample1/GAPIT.Association.GWAS_Results.FarmCPU.GSW60.csv.gz",
+#                        "3d_Resampling.FarmCPU/GSW60/resample2/GAPIT.Association.GWAS_Results.FarmCPU.GSW60.csv.gz",
 #                        "-o", "99_tmp"))
 
 
@@ -26,7 +27,11 @@ cat("Compiling permutations and resamplings for",args$outprefix,"\n")
 
 # Load permutations
 cat("\tLoading permutations from",length(args$perms),"input files\n")
-perms = lapply(args$perms, read.csv, nrow=1) # GAPIT best hit is always the top row
+perms = lapply(args$perms, function(infile){
+  mygwas = read.csv(infile)
+  best = which.min(mygwas$P.value)
+  return(mygwas[best,])
+})
 perms = sort(do.call(rbind, perms)$P.value)
 
 # Load resamples; process at this stage so as to not save a bunch of unnecessary data in memory
@@ -45,13 +50,14 @@ resamples = lapply(args$resamples, function(infile){
     
     # Filter based on input arguments
     mydata=subset(mydata, mydata$empirical_p <= args$perm_p_cutoff)
-    return(mydata[,c('SNP', 'Chromosome', 'Position', 'empirical_p')])
+    return(mydata[,c('SNP', 'Chr', 'Pos', 'empirical_p')])
+    #return(mydata)
 })
 
 # Get RMIPs
 cat("\tCalculating RMIPs\n")
 resamples.all = do.call(rbind, resamples)
-rmip = paste(resamples.all$SNP, resamples.all$Chromosome, resamples.all$Position, sep="###")
+rmip = paste(resamples.all$SNP, resamples.all$Chr, resamples.all$Pos, sep="###")
 rmip = table(rmip) / length(args$resamples)
 cat("\t\tTotal of", sum(rmip >= args$rmip_cutoff), "traits pass RMIP cutoff\n")
 

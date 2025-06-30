@@ -40,7 +40,7 @@ args=parser$parse_args()
 # ))
 
 
-cat("Running", args$num_perms,"FarmCPU permutations for", args$trait, "with", args$num_pcs, "PCs and covariates", args$covariates, "\n")
+cat("Running", args$num_perms,args$model,"permutations for", args$trait, "with", args$num_pcs, "PCs and covariates", args$covariates, "\n")
 basedir=getwd()
 
 # Load data

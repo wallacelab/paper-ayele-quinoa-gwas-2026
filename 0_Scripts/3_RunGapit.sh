@@ -13,7 +13,9 @@ num_pcs=$5   # Number of principal components to include
 num_perms=$6  # Number of permutations to run to get null distribution of results
 num_resamples=$7 # Number of resamples to run to get RMIPs
 resample_fraction=$8 # Resample fraction number
-num_cores=$9 # Number of CPU cores to use
+perm_p_cutoff=$9  # P-value cutoff for permutations to count as null "hits"
+rmip_cutoff=${10} # RMIP cutoff for a hit to count as real
+num_cores=${11} # Number of CPU cores to use
 
 
 ########
@@ -88,30 +90,31 @@ for model in FarmCPU BLINK; do
         myresampledir=$resampledir/$trait
         if [ ! -e $mypermdir ]; then mkdir $mypermdir; fi
         if [ ! -e $myresampledir ]; then mkdir $myresampledir; fi
-#         
-#         # Run permutations & resamplings
-#         Rscript $scriptdir/3b_ResampleGapit.r --genofile $genofile --phenofile $phenofile --map $mapfile --kinshipfile $kinfile --trait $trait --num-pcs $num_pcs \
-#             --permdir $mypermdir --resampledir $myresampledir --num-perms $num_perms --num-resamples $num_resamples --resample-fraction $resample_fraction \
-#             --model $model --num-cores $num_cores
-# 
-#         # Save actual permutation results with p-values; remove all other intermediate files
-#         pigz $mypermdir/*/GAPIT*GWAS_results.csv
-#         rm $mypermdir/*/*.pdf $mypermdir/*/*.csv
         
-#         # Save actual resample results with p-values; remove all other intermediate files
-#         pigz $myresampledir/*/GAPIT*GWAS_results.csv
-#         rm $myresampledir/*/*.pdf $myresampledir/*/*.csv
-    #     
+        # Run permutations & resamplings
+        Rscript $scriptdir/3b_ResampleGapit.r --genofile $genofile --phenofile $phenofile --map $mapfile --kinshipfile $kinfile --trait $trait --num-pcs $num_pcs \
+            --permdir $mypermdir --resampledir $myresampledir --num-perms $num_perms --num-resamples $num_resamples --resample-fraction $resample_fraction \
+            --model $model --num-cores $num_cores
+
+        # Save actual permutation results with p-values; remove all other intermediate files
+        pigz $mypermdir/*/GAPIT*GWAS_Results.$model.$trait.csv
+        rm $mypermdir/*/*.pdf $mypermdir/*/*.csv
+        
+        # Save actual resample results with p-values; remove all other intermediate files
+        pigz $myresampledir/*/GAPIT*GWAS_Results.$model.$trait.csv
+        rm $myresampledir/*/*.pdf $myresampledir/*/*.csv
+         
         
         # Collect permuted p-values
-        myperms=$permdir/$trait/*/*GWAS_results.csv.gz
-        myresamples=$resampledir/$trait/*/*GWAS_results.csv.gz   
-        Rscript $scriptdir/3e_GetRmips.r --perms $myperms --resamples $myresamples --perm-p-cutoff 0.05 --rmip-cutoff 0.05 -o $resultdir/1e_$trait.p05.rmip05 -t $trait
+        myperms=$mypermdir/*/GAPIT*GWAS_Results.$model.$trait.csv.gz
+        myresamples=$myresampledir/*/GAPIT*GWAS_Results.$model.$trait.csv.gz   
+        Rscript $scriptdir/3e_GetRmips.r --perms $myperms --resamples $myresamples --perm-p-cutoff $perm_p_cutoff  --rmip-cutoff $rmip_cutoff \
+            -o $resultdir/1e_$trait.p05.rmip05 -t $trait
         
-        break
+#         break
     done
 
-    break
+    #break
 done
 
 # TODO: Get linkage among all the RMIP hits and see if any should be combined into single hits?
