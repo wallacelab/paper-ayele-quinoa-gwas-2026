@@ -12,19 +12,20 @@ library(scales)
 # Arguments
 parser=ArgumentParser()
 parser$add_argument("-i", "--infiles", nargs="*", help="Input files of parsed RMIP values from step 3e_")
-parser$add_argument("-w", "--winsize", default=5e6, help="Window size (in bp) for RMIP sliding window")
-parser$add_argument("-s", "--step", default=5e5, help="Step size (in bp) for RMIP sliding window")
+parser$add_argument("-w", "--winsize", default=5e6, type="double", help="Window size (in bp) for RMIP sliding window")
+parser$add_argument("-s", "--step", default=5e5, type="double", help="Step size (in bp) for RMIP sliding window")
 parser$add_argument("--drop-contigs", default=FALSE, action="store_true", help="Whether to drop contigs from the plot")
 parser$add_argument("--index", help="Samtools index of chromosome sizes")
 parser$add_argument("--rmip-cutoff", type='double', default=0.05, help="RMIP cutoff to be consider a genuine hit")
 parser$add_argument("-o", "--outprefix", help="Output file prefix")
 args=parser$parse_args()
-setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/3_GWAS/')
-args=parser$parse_args(c("-i","3e_Results.FarmCPU/3e_Seedweight.p0.01.rmip0.05.csv",
-                       "3e_Results.FarmCPU/3e_GSW56.p0.01.rmip0.05.csv",
-                       "--index", "3f_genome_index.txt", 
-                       "--drop-contigs",
-                       "-o", "99_tmp"))
+# setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/3_GWAS/')
+# args=parser$parse_args(c("-i","3e_Results.FarmCPU/3e_Seedweight.p0.01.rmip0.05.csv",
+#                        "3e_Results.FarmCPU/3e_GSW56.p0.01.rmip0.05.csv",
+#                        "3e_Results.FarmCPU/3e_GSW60.p0.01.rmip0.05.csv",
+#                        "--index", "3f_genome_index.txt",
+#                        "--drop-contigs",
+#                        "-o", "99_tmp"))
 
 # Load data
 index=read.delim(args$index, header=FALSE,
@@ -95,6 +96,7 @@ plot_manhattan = function(trait_name){
   for(mychrom in rownames(offsets)){
     
     # Get cumulative RMIP values
+    #cat("\tOn chrom",mychrom,"with length",offsets[mychrom, "length"], "\n") # For debuggin
     mypoints = data.frame(chr=mychrom, pos=seq(0, offsets[mychrom, "length"], by=args$step), cum_rmip=0,
                           significant=NA) # "significant" column s ggplot doesn't throw an error
     for(i in 1:nrow(mypoints)){

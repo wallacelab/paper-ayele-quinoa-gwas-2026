@@ -18,6 +18,9 @@ rmip_cutoff=${10} # RMIP cutoff for a hit to count as real
 genome=${11}
 num_cores=${12} # Number of CPU cores to use
 
+# Manhattan plot parameters (not important enough to pass from master script)
+winsize=5e6
+step=5e5
 
 ########
 # Conda envs
@@ -62,36 +65,36 @@ genofile=$workdir/3a_genos.numeric.rds
 mapfile=$workdir/3a_genos.map.txt
 kinfile=$workdir/3a_kinship.txt
  
-# Loop over models
-for model in FarmCPU BLINK; do
-
-    # Make subdirectories
-    permdir=$workdir/3b_Permutations.$model
-    resampledir=$workdir/3d_Resampling.$model
-    resultdir=$workdir/3e_Results.$model
-    if [ ! -e $permdir ] ; then mkdir $permdir; fi
-    if [ ! -e $resampledir ] ; then mkdir $resampledir; fi
-    if [ ! -e $resultdir ] ; then mkdir $resultdir; fi
-
-
-    # Loop over traits
-    for trait in $traits; do
-            
-    # # # # #     # Set up Covariates. - Not for this analysis
-    # # # # #     case $trait in
-    # # # # #         "FLoweringtime") covariates="$cov_height" ;;  
-    # # # # #         "Log_2019.2020_PH") covariates="NONE" ;;  
-    # # # # #         *) covariates="$cov_flower" ;;  # Just flowering for everything else (=aphid counts and plant height)
-    # # # # #     esac
-    # # # # #     echo "Running trait $trait with covariates $covariates"
-        
-    
-        # Output directories
-        mypermdir=$permdir/$trait
-        myresampledir=$resampledir/$trait
-        if [ ! -e $mypermdir ]; then mkdir $mypermdir; fi
-        if [ ! -e $myresampledir ]; then mkdir $myresampledir; fi
-        
+# # Loop over models
+# for model in FarmCPU BLINK; do
+# 
+#     # Make subdirectories
+#     permdir=$workdir/3b_Permutations.$model
+#     resampledir=$workdir/3d_Resampling.$model
+#     resultdir=$workdir/3e_Results.$model
+#     if [ ! -e $permdir ] ; then mkdir $permdir; fi
+#     if [ ! -e $resampledir ] ; then mkdir $resampledir; fi
+#     if [ ! -e $resultdir ] ; then mkdir $resultdir; fi
+# 
+# 
+#     # Loop over traits
+#     for trait in $traits; do
+#             
+#     # # # # #     # Set up Covariates. - Not for this analysis
+#     # # # # #     case $trait in
+#     # # # # #         "FLoweringtime") covariates="$cov_height" ;;  
+#     # # # # #         "Log_2019.2020_PH") covariates="NONE" ;;  
+#     # # # # #         *) covariates="$cov_flower" ;;  # Just flowering for everything else (=aphid counts and plant height)
+#     # # # # #     esac
+#     # # # # #     echo "Running trait $trait with covariates $covariates"
+#         
+#     
+#         # Output directories
+#         mypermdir=$permdir/$trait
+#         myresampledir=$resampledir/$trait
+#         if [ ! -e $mypermdir ]; then mkdir $mypermdir; fi
+#         if [ ! -e $myresampledir ]; then mkdir $myresampledir; fi
+#         
 #         # Run permutations & resamplings
 #         Rscript $scriptdir/3b_ResampleGapit.r --genofile $genofile --phenofile $phenofile --map $mapfile --kinshipfile $kinfile --trait $trait --num-pcs $num_pcs \
 #             --permdir $mypermdir --resampledir $myresampledir --num-perms $num_perms --num-resamples $num_resamples --resample-fraction $resample_fraction \
@@ -104,22 +107,22 @@ for model in FarmCPU BLINK; do
 #         # Save actual resample results with p-values; remove all other intermediate files
 #         pigz $myresampledir/*/GAPIT*GWAS_Results.$model.$trait.csv
 #         rm $myresampledir/*/*.pdf $myresampledir/*/*.csv
-         
-        
-        # Collect permuted p-values
-        myperms=$mypermdir/*/GAPIT*GWAS_Results.$model.$trait.csv.gz
-        myresamples=$myresampledir/*/GAPIT*GWAS_Results.$model.$trait.csv.gz   
-        outprefix=$resultdir/3e_$trait.p$perm_p_cutoff.rmip$rmip_cutoff
-        Rscript $scriptdir/3e_GetRmips.r --perms $myperms --resamples $myresamples --perm-p-cutoff $perm_p_cutoff  --rmip-cutoff $rmip_cutoff \
-            -o $outprefix -t $trait --num-cores $num_cores
-        
-#         break
-    done
+#          
+#         
+#         # Collect permuted p-values
+#         myperms=$mypermdir/*/GAPIT*GWAS_Results.$model.$trait.csv.gz
+#         myresamples=$myresampledir/*/GAPIT*GWAS_Results.$model.$trait.csv.gz   
+#         outprefix=$resultdir/3e_$trait.p$perm_p_cutoff.rmip$rmip_cutoff
+#         Rscript $scriptdir/3e_GetRmips.r --perms $myperms --resamples $myresamples --perm-p-cutoff $perm_p_cutoff  --rmip-cutoff $rmip_cutoff \
+#             -o $outprefix -t $trait --num-cores $num_cores
+#         
+# #         break
+#     done
+# 
+#     #break
+# done
 
-    #break
-done
-
-
+# 
 # # Make file of chromosome offsets for plotting Manhattan plots
 # conda activate $conda_samtools
 # zcat $genome > $workdir/tmp_genome.fa
@@ -127,9 +130,8 @@ done
 # rm $workdir/tmp_genome.fa
 
 # Plot combined Manhattan plots
+for model in FarmCPU BLINK; do
+    Rscript $scriptdir/3f_MakeManhattanPlots.r -i $workdir/3e_Results.$model/*.csv --winsize $winsize --step $step --drop-contigs --index $workdir/3f_genome_index.txt \
+        --rmip-cutoff $rmip_cutoff -o $workdir/3f_manahttans.$model
+done
 
-
-
-
-
-# TODO: Get linkage among all the RMIP hits and see if any should be combined into single hits?
