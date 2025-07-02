@@ -75,4 +75,4 @@ num_resamples=100  # Number of resamples to run to get RMIPs
 resample_fraction=0.9  # Resample fraction number
 perm_p_cutoff=0.01  # P-value cutoff for permutations to count as null "hits"
 rmip_cutoff=0.05 # RMIP cutoff for a hit to count as real
-bash $scriptdir/3_RunGapit.sh $scriptdir $gwasdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction $perm_p_cutoff $rmip_cutoff $num_cores
+bash $scriptdir/3_RunGapit.sh $scriptdir $gwasdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction $perm_p_cutoff $rmip_cutoff $genome $num_cores

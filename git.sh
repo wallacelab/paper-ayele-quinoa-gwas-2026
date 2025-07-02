@@ -17,6 +17,9 @@ git add 0_Scripts/adapters.fa  # Sequencing adapter file for read cleaning
 git add 0_Scripts/*.yml # Conda environment exports
 
 # Add key intermediate files
+git add 3_GWAS/3e_Results*/*.csv
+git add 3_GWAS/3f_genome_index.txt
+
 
 # Add output SVGs
 
