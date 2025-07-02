@@ -4,6 +4,7 @@
 library(argparse)
 library(ggplot2)
 library(dplyr)
+library(parallel)
 options(stringsAsFactors=F)
 
 # Arguments
@@ -14,21 +15,23 @@ parser$add_argument("--perm-p-cutoff", type='double', default=0.01, help="P-valu
 parser$add_argument("--rmip-cutoff", type='double', default=0.05, help="RMIP cutoff to be consider a genuine hit")
 parser$add_argument("-o", "--outprefix", help="Output file prefix")
 parser$add_argument("-t", "--trait", default="unnamed trait", help="Trait name")
+parser$add_argument("-n", "--num-cores", default=1, help="Number of parallel cores to use to load data")
 args=parser$parse_args()
 # setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/3_GWAS/')
-# args=parser$parse_args(c("-p","3b_Permutations.FarmCPU/GSW60/perm1/GAPIT.Association.GWAS_Results.FarmCPU.GSW60.csv.gz",
-#                        "3b_Permutations.FarmCPU/GSW60/perm2/GAPIT.Association.GWAS_Results.FarmCPU.GSW60.csv.gz",
-#                        "-r", "3d_Resampling.FarmCPU/GSW60/resample1/GAPIT.Association.GWAS_Results.FarmCPU.GSW60.csv.gz",
-#                        "3d_Resampling.FarmCPU/GSW60/resample2/GAPIT.Association.GWAS_Results.FarmCPU.GSW60.csv.gz",
-#                        "-o", "99_tmp"))
+# args=parser$parse_args(c("-p","3b_Permutations.FarmCPU/PhiPS56/perm1/GAPIT.Association.GWAS_Results.FarmCPU.PhiPS56.csv.gz",
+#                        "3b_Permutations.FarmCPU/PhiPS56/perm2/GAPIT.Association.GWAS_Results.FarmCPU.PhiPS56.csv.gz",
+#                        "-r", "3d_Resampling.FarmCPU/PhiPS56/resample1/GAPIT.Association.GWAS_Results.FarmCPU.PhiPS56.csv.gz",
+#                        "3d_Resampling.FarmCPU/PhiPS56/resample2/GAPIT.Association.GWAS_Results.FarmCPU.PhiPS56.csv.gz",
+#                        "-o", "99_tmp", "-n", "2"))
 
 
-cat("Compiling permutations and resamplings for",args$outprefix,"\n")
+cat("Compiling permutations and resamplings for",args$outprefix,"on",args$num_cores,"cores\n")
 
 # Load permutations
 cat("\tLoading permutations from",length(args$perms),"input files\n")
-perms = lapply(args$perms, function(infile){
-  mygwas = read.csv(infile)
+perms = mclapply(args$perms, mc.cores=args$num_cores, FUN=function(infile){
+  mygwas = read.csv(infile, colClasses="character") # Read as character to speed up
+  mygwas$P.value = as.numeric(mygwas$P.value)
   best = which.min(mygwas$P.value)
   return(mygwas[best,])
 })
@@ -36,8 +39,9 @@ perms = sort(do.call(rbind, perms)$P.value)
 
 # Load resamples; process at this stage so as to not save a bunch of unnecessary data in memory
 cat("\tLoading resamples from",length(args$resamples),"input files\n")
-resamples = lapply(args$resamples, function(infile){
-    mydata = read.csv(infile)
+resamples = mclapply(args$resamples, mc.cores=args$num_cores, FUN=function(infile){
+    mydata = read.csv(infile, colClasses="character")
+    mydata$P.value = as.numeric(mydata$P.value)
     
     # # Get empirical p-value
     # mydata$empirical_p = sapply(mydata$P.value, function(p){
@@ -61,26 +65,31 @@ rmip = paste(resamples.all$SNP, resamples.all$Chr, resamples.all$Pos, sep="###")
 rmip = table(rmip) / length(args$resamples)
 cat("\t\tTotal of", sum(rmip >= args$rmip_cutoff), "traits pass RMIP cutoff\n")
 
-# Separate out for plotting
+# Separate for plotting (and make null results if none present)
 if(length(rmip)==0){
     toplot = data.frame(snp=character(), chr=numeric(), pos=numeric(), rmip=numeric())
-}
-
-toplot = strsplit(names(rmip), split="###")
-toplot = data.frame(do.call(rbind, toplot))
-names(toplot) = c("snp", "chr", "pos")
-toplot$chr = as.numeric(toplot$chr)
-toplot$pos = as.numeric(toplot$pos)
-toplot$rmip = as.numeric(rmip)
-
-    
-# Graph results
-toplot$significant = ifelse(toplot$rmip >= args$rmip_cutoff, yes="yes", no="no")
-myplot = ggplot(toplot, mapping=aes(x=pos, y=rmip, color=significant)) +
+    myplot= ggplot() + 
+      annotate("text", x = 4, y = 25, size=8,
+               label = paste("No hits for",args$trait), color="red") + 
+      theme_void()
+}else{
+  # Make data table
+  toplot = strsplit(names(rmip), split="###")
+  toplot = data.frame(do.call(rbind, toplot))
+  names(toplot) = c("snp", "chr", "pos")
+  toplot$chr = as.numeric(toplot$chr)
+  toplot$pos = as.numeric(toplot$pos)
+  toplot$rmip = as.numeric(rmip)
+  
+  # Graph results
+  toplot$significant = ifelse(toplot$rmip >= args$rmip_cutoff, yes="yes", no="no")
+  myplot = ggplot(toplot, mapping=aes(x=pos, y=rmip, color=significant)) +
     geom_point() + 
     facet_wrap(~chr, nrow=2) +
     ggtitle(args$trait) +
     scale_color_manual(values=c("yes"="red", "no"="black"))
+}
+    
 
 # Output 
 cat("\tWriting out results\n")

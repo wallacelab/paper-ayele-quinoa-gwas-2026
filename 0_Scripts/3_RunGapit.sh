@@ -15,7 +15,8 @@ num_resamples=$7 # Number of resamples to run to get RMIPs
 resample_fraction=$8 # Resample fraction number
 perm_p_cutoff=$9  # P-value cutoff for permutations to count as null "hits"
 rmip_cutoff=${10} # RMIP cutoff for a hit to count as real
-num_cores=${11} # Number of CPU cores to use
+genome=${11}
+num_cores=${12} # Number of CPU cores to use
 
 
 ########
@@ -24,6 +25,7 @@ num_cores=${11} # Number of CPU cores to use
 
 # Conda environments
 conda_tassel5=tassel-5.2.89
+conda_samtools=samtools-1.16.1
 
 # Make it so can run conda from script
 . $(conda info --root)/etc/profile.d/conda.sh 
@@ -60,8 +62,7 @@ genofile=$workdir/3a_genos.numeric.rds
 mapfile=$workdir/3a_genos.map.txt
 kinfile=$workdir/3a_kinship.txt
  
-# Loop over traits - TODO - Try with both FarmCPU and with BLINK
-
+# Loop over models
 for model in FarmCPU BLINK; do
 
     # Make subdirectories
@@ -91,30 +92,44 @@ for model in FarmCPU BLINK; do
         if [ ! -e $mypermdir ]; then mkdir $mypermdir; fi
         if [ ! -e $myresampledir ]; then mkdir $myresampledir; fi
         
-        # Run permutations & resamplings
-        Rscript $scriptdir/3b_ResampleGapit.r --genofile $genofile --phenofile $phenofile --map $mapfile --kinshipfile $kinfile --trait $trait --num-pcs $num_pcs \
-            --permdir $mypermdir --resampledir $myresampledir --num-perms $num_perms --num-resamples $num_resamples --resample-fraction $resample_fraction \
-            --model $model --num-cores $num_cores
-
-        # Save actual permutation results with p-values; remove all other intermediate files
-        pigz $mypermdir/*/GAPIT*GWAS_Results.$model.$trait.csv
-        rm $mypermdir/*/*.pdf $mypermdir/*/*.csv
-        
-        # Save actual resample results with p-values; remove all other intermediate files
-        pigz $myresampledir/*/GAPIT*GWAS_Results.$model.$trait.csv
-        rm $myresampledir/*/*.pdf $myresampledir/*/*.csv
+#         # Run permutations & resamplings
+#         Rscript $scriptdir/3b_ResampleGapit.r --genofile $genofile --phenofile $phenofile --map $mapfile --kinshipfile $kinfile --trait $trait --num-pcs $num_pcs \
+#             --permdir $mypermdir --resampledir $myresampledir --num-perms $num_perms --num-resamples $num_resamples --resample-fraction $resample_fraction \
+#             --model $model --num-cores $num_cores
+# 
+#         # Save actual permutation results with p-values; remove all other intermediate files
+#         pigz $mypermdir/*/GAPIT*GWAS_Results.$model.$trait.csv
+#         rm $mypermdir/*/*.pdf $mypermdir/*/*.csv
+#         
+#         # Save actual resample results with p-values; remove all other intermediate files
+#         pigz $myresampledir/*/GAPIT*GWAS_Results.$model.$trait.csv
+#         rm $myresampledir/*/*.pdf $myresampledir/*/*.csv
          
         
         # Collect permuted p-values
         myperms=$mypermdir/*/GAPIT*GWAS_Results.$model.$trait.csv.gz
         myresamples=$myresampledir/*/GAPIT*GWAS_Results.$model.$trait.csv.gz   
+        outprefix=$resultdir/3e_$trait.p$perm_p_cutoff.rmip$rmip_cutoff
         Rscript $scriptdir/3e_GetRmips.r --perms $myperms --resamples $myresamples --perm-p-cutoff $perm_p_cutoff  --rmip-cutoff $rmip_cutoff \
-            -o $resultdir/1e_$trait.p05.rmip05 -t $trait
+            -o $outprefix -t $trait --num-cores $num_cores
         
 #         break
     done
 
     #break
 done
+
+
+# # Make file of chromosome offsets for plotting Manhattan plots
+# conda activate $conda_samtools
+# zcat $genome > $workdir/tmp_genome.fa
+# samtools faidx $workdir/tmp_genome.fa --fai-idx $workdir/3f_genome_index.txt
+# rm $workdir/tmp_genome.fa
+
+# Plot combined Manhattan plots
+
+
+
+
 
 # TODO: Get linkage among all the RMIP hits and see if any should be combined into single hits?
