@@ -25,7 +25,7 @@ parser$add_argument("--num-resamples", type="integer", default=1, help="How many
 parser$add_argument("-f", "--resample-fraction", type="double", default=0.8, help="What fraction of genotypes are included in each resampling")
 args=parser$parse_args()
 # setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/3_GWAS/')
-# args=parser$parse_args(c("-g","3a_genos.numeric.rds",
+# args=parser$parse_args(c("-g","3a_genos.numeric.GAPIT.rds",
 #                          "-m","3a_genos.map.txt",
 #                          "-p","3a_phenos.csv",
 #                          "-k", "3a_kinship.txt",
@@ -48,6 +48,12 @@ map = read.delim(args$mapfile)
 genos=readRDS(args$genofile)
 phenos=read.csv(args$phenofile)[,c("Taxa", args$trait)]
 kinship=read.delim(args$kinshipfile, skip=3, row.names=1, header=FALSE)
+
+# Confirm genos are in 0/1/2 range
+genorange = range(genos[,-1], na.rm=TRUE)
+if(!identical(genorange, c(0,2))){
+  stop("GENOTYPES NOT IN EXPECTED RANGE OF 0-2 FOR GAPIT")
+}
 
 # Format kinship for GAPIT
 rownames(kinship) = basename(rownames(kinship)) # Fix taxa names

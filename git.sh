@@ -20,8 +20,8 @@ git add 0_Scripts/*.yml # Conda environment exports
 git add 3_GWAS/3e_Results*/*.csv
 git add 3_GWAS/3f_genome_index.txt
 
-
 # Add output SVGs
+
 
 # Remove any deleted/untracked files
 git add -u

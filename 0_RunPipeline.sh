@@ -65,7 +65,7 @@ if [[ ! -e $gwasdir ]] ; then mkdir $gwasdir; fi
 #     $company_diversity $num_cores
 
 
-# Run GWAS with GAPIT - # TODO - Fix debug numbers and file below
+# Run GWAS with GAPIT 
 #genos=$scriptdir/mdp_genotype.short.hmp.txt.gz  # DEBUG Shorter version with 1k sites to debug quickly
 genos=$scriptdir/mdp_genotype.hmp.txt.gz  # Genotype file from Step 2, modified by coauthor to remove contigs and rename chromosomes
 phenos=$scriptdir/mdp_traits.txt  # Phenotype file
@@ -73,6 +73,6 @@ num_pcs=3   # Number of principal components to include
 num_perms=100   # Number of permutations to run to get null distribution of results
 num_resamples=100  # Number of resamples to run to get RMIPs
 resample_fraction=0.9  # Resample fraction number
-perm_p_cutoff=0.01  # P-value cutoff for permutations to count as null "hits"
-rmip_cutoff=0.05 # RMIP cutoff for a hit to count as real
-bash $scriptdir/3_RunGapit.sh $scriptdir $gwasdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction $perm_p_cutoff $rmip_cutoff $genome $num_cores
+perm_p_cutoff="0.05 0.01"  # P-value cutoffs for permutations to count as null "hits"; make a single string with space delimits among different options
+rmip_cutoff="0.05" # RMIP cutoff for a hit to count as real; make a single string with space delimits among different options
+bash $scriptdir/3_RunGapit.sh $scriptdir $gwasdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" $genome $num_cores
