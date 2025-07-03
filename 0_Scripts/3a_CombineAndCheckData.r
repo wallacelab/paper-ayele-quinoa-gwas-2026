@@ -1,8 +1,10 @@
 #! /usr/bin/Rscript
 
-# This is a basic template to use for making R scripts
+# Check and unify genotype and phenotype files
 library(argparse)
 library(tidyverse)
+library(scales)
+library(rrBLUP)
 
 # Arguments
 parser=ArgumentParser()
@@ -31,7 +33,6 @@ genos = genos %>%
 genos = genos %>% rownames_to_column("taxa")
 genos$taxa = basename(genos$taxa)
 
-
 # Compare genos and phenos (so make sure have taxa the same)
 display = function(a, b, text){
     percent = round(length(a) / length(b) * 100, digits=1)
@@ -40,6 +41,23 @@ display = function(a, b, text){
 shared = intersect(rownames(phenos), genos$taxa)
 display(shared, rownames(phenos), "trait")
 display(shared, genos$taxa, "genotype")
+
+# Estimate heritabilities with rrBLUP
+cat("\tEstimating heritabilities with rrBLUP\n")
+phenos.rrblup = phenos %>%  # Reformat phenotypes
+  rownames_to_column("taxa")
+genos.rrblup = genos %>% # Reformat genotypes
+  mutate(across(-taxa, ~rescale(.x, from=c(0,1), to=c(-1,1) ))) %>%
+  column_to_rownames("taxa")
+relations = A.mat(genos.rrblup) # Kinship matrix
+models = lapply(names(phenos), function(mypheno){
+  kin.blup(data=phenos.rrblup, geno="taxa", pheno=mypheno, K=relations)
+})
+herits = lapply(models, function(m){
+  m$Vg / (m$Vg + m$Ve)
+}) %>% unlist()
+herits = data.frame(trait =names(phenos), h2_raw = herits,
+                    h2=round(herits, digits=3))
 
 
 # Plot phenotype distributions
@@ -51,12 +69,26 @@ traitplot = ggplot(phenodata) +
   geom_histogram(bins=30) +
   facet_wrap(~trait, scales="free_x") +
   theme(legend.position="none") +
-  labs(x="Trait value", y="Count", title="GWAS trait distributions")
+  labs(x="Trait value", y="Count", title="GWAS trait distributions") +
+  geom_text(data=herits, mapping=aes(x=-Inf, y=Inf, label=paste("h2 =",h2)),
+            hjust=0, vjust=1)
 ggsave(traitplot, file=paste(args$outprefix, "_phenos.png", sep=""), width=8, height=8)
+
 
 # Write out phenotypes
 outphenos = data.frame(Taxa=rownames(phenos), phenos)
 write.csv(outphenos, file=paste(args$outprefix, "_phenos.csv", sep=""), row.names = F)
 
-# Write out genotypes as RDS to save time later
-write_rds(genos, file=paste(args$outprefix, "_genos.numeric.rds", sep=""))
+# Convert genotypes to GAPIT range (0,1,2) and write out as RDS to save time later
+# Confirm genos in 0-1 range
+genorange = range(genos[,-1], na.rm=TRUE)
+if(!identical(genorange, c(0,1))){
+  stop("GENOTYPES NOT IN EXPECTED RANGE OF 0-1")
+}
+# Convert
+genos.gapit = genos %>%
+  mutate(across(-taxa, ~rescale(.x, from=c(0,1), to=c(0,2) )))
+# Write out
+write_rds(genos, file=paste(args$outprefix, "_genos.numeric.GAPIT.rds", sep=""))
+
+
