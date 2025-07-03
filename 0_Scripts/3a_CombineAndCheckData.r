@@ -89,6 +89,6 @@ if(!identical(genorange, c(0,1))){
 genos.gapit = genos %>%
   mutate(across(-taxa, ~rescale(.x, from=c(0,1), to=c(0,2) )))
 # Write out
-write_rds(genos, file=paste(args$outprefix, "_genos.numeric.GAPIT.rds", sep=""))
+write_rds(genos.gapit, file=paste(args$outprefix, "_genos.numeric.GAPIT.rds", sep=""))
 
 
