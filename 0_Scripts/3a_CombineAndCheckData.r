@@ -12,11 +12,13 @@ parser$add_argument("-g", "--genofile", help="Input genotype file (numeric forma
 parser$add_argument("-p", "--phenofile", help="Input files of phenotyes")
 parser$add_argument("-o", "--outprefix", help="Output file prefix")
 parser$add_argument("-c", "--covariates", nargs="*", help="Which traits are the covariates")
+parser$add_argument("-r", "--remove-outliers", default=FALSE, action="store_true", help="Whether to remove outliers (using hardcoded section)")
 args=parser$parse_args()
 # setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/')  # Debug working directory
 # args=parser$parse_args(c("-p","0_Scripts/mdp_traits.txt",
 #                          "-g",'3_GWAS/3a_genos.numeric.txt',
-#                          "-o",'99_tmp'))
+#                          "-o",'99_tmp',
+#                          "--remove-outliers"))
 
 
 # Load data
@@ -41,6 +43,14 @@ display = function(a, b, text){
 shared = intersect(rownames(phenos), genos$taxa)
 display(shared, rownames(phenos), "trait")
 display(shared, genos$taxa, "genotype")
+
+## Experimental - test removing outliers ##
+if(args$remove_outliers){
+  phenos$E56[phenos$E56 < 2.5] = NA
+}
+
+
+## End Experimental section ##
 
 # Estimate heritabilities with rrBLUP
 cat("\tEstimating heritabilities with rrBLUP\n")
