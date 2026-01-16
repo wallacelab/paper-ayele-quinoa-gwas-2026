@@ -15,6 +15,8 @@ find ./ | grep -i -e "\.sh$" -e "\.py$" -e "\.r$" | xargs -d "\n" git add
 # Add support files
 git add 0_Scripts/adapters.fa  # Sequencing adapter file for read cleaning
 git add 0_Scripts/*.yml # Conda environment exports
+git add 0_Scripts/*.csv
+git add 0_Phenotypes/*.csv
 
 # Add key intermediate files
 git add 3_GWAS/3e_Results*/*.csv
