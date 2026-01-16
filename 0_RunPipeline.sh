@@ -37,6 +37,13 @@ if [[ ! -e $qcdir ]] ; then mkdir $qcdir; fi
 if [[ ! -e $snpdir ]] ; then mkdir $snpdir; fi
 if [[ ! -e $gwasdir ]] ; then mkdir $gwasdir; fi
 
+# Combine phenotypes for years 2024 and then 2025
+# TODO - Compare 2025 physiology datasets to see what different/which to keep
+# TODO - Figure out if anything needs to be combiend to blues
+# TODO - Do QC on 2025 data
+# TODO - Do programmatic cleaning of all data (outliers, boxcox transform, etc)
+# TODO - Run GWAS on all data
+bash $scriptdir/0_CleanPhenos.r $scriptdir $phenodir  # Note: a lot of needed files, etc. included in script instead of passing by argument
 
 
 # # Basic quality control (fastqc, multiqc, adaptor trimming, etc. Looking at one of CD Genomics' BAM files, everything was still 144 bp, so no adapter trimming?)
