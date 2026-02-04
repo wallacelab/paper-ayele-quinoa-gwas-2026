@@ -29,7 +29,7 @@ metacols = c("Taxa", "ENTRY", "TRT") # Metadata columns
 traits = names(raw) %>% setdiff(metacols) # Get list of traits
 
 ################
-# Basic Cleaning - NOTE: This done after consulting the resuling diagnostic plots
+# Basic Cleaning - NOTE: This done after consulting the resulting diagnostic plots
 ################
 
 
