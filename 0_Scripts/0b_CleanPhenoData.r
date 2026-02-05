@@ -14,6 +14,8 @@ parser$add_argument("-o", "--outprefix", help="Output file prefix")
 parser$add_argument("-p", "--problem-traits", nargs="*", help="Traits that show a specific problem")
 parser$add_argument("-m", "--prob-min-row", type="integer", default=0, help="Min row to filter out from Problem traits")
 parser$add_argument("-x", "--prob-max-row", type="integer", default=0, help="Max row to filter out from Problem traits")
+parser$add_argument("-q", "--iqr-cutoff", type="double", default=1.7, help="Cutoff for points to be considered an outlier by IQR")
+parser$add_argument("-z", "--zscore-cutoff", type="double", default=3, help="Cutoff for points to be considered an outlier by Zscore")
 args=parser$parse_args()
 # setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/0_Phenotypes/')  # Debug working directory
 # args=parser$parse_args(c("-i","0a_phenos.2024.csv",
@@ -56,12 +58,13 @@ if(length(args$problem_traits)>0){
 longdata = adjusted %>%
   pivot_longer(cols=all_of(traits), names_to="trait", values_to="value")
 # Clean via outlier detection
+cat("\tFiltering outliers based on IQR cutoff",args$iqr_cutoff,"and z-score cutoff", args$zscore_cutoff, "\n")
 cleaned = lapply(traits, function(t){
   mydata = longdata %>% 
     filter(trait==t) %>%
     filter(!is.na(value))  # Remove missing values from above; will be restored on pivot_wider()
   outliers = check_outliers(mydata, method=c("zscore", "iqr", "mcd"),
-                            threshold = list(iqr=1.7, zscore=3)) %>%
+                            threshold = list(iqr=args$iqr_cutoff, zscore=args$zscore_cutoff)) %>%
     as.logical()
   mydata$value[outliers] = NA
   return(mydata)
