@@ -16,7 +16,8 @@ find ./ | grep -i -e "\.sh$" -e "\.py$" -e "\.r$" | xargs -d "\n" git add
 git add 0_Scripts/adapters.fa  # Sequencing adapter file for read cleaning
 git add 0_Scripts/*.yml # Conda environment exports
 git add 0_Scripts/*.csv
-git add 0_Phenotypes/*.csv  0_Phenotypes/*.txt
+git add 0_Phenotypes/0a*.csv # Initial (raw) data
+git add 0_Phenotypes/*clean.csv  # Cleaned data after removing outliers and doing boxcox transformation
 
 # Add key intermediate files
 git add 3_GWAS/3e_Results*/*.csv

@@ -1,177 +1,118 @@
 #! /usr/bin/Rscript
 
-# TODO - Update this script to Addissu's data (Currently still Roy GxE)
+# Transform supplied phenos with Boxcox transformation to find best fit
 
 # Load libraries
-library(data.table)
+library(argparse)
 library(tidyverse)
-library(phyloseq)
 library(MASS)
+library(ggpubr)
+library(scales)
 
-# Global variables
-#pathway_file="0_data_files/path_abun_unstrat_descrip.tsv" # Original analysis; DEPRECATED
-pathway_file="3_GxE/3d_picrust2_predictions/pathways_out/path_abun_unstrat.tsv.gz" # Redone with exact GxE sample dataset
-max_sample_missing=0.2 # Fraction of pathway counts with 0s (=missing) in more than this many samples will be removed
-n_diagnostics=12 # Number of pathways to plot diagnostic plots for transmforations
-fdr_cutoff=0.01 # Cutoff to consider a pathway significant
+# Arguments
+parser=ArgumentParser()
+parser$add_argument("-i", "--infile", help="Input file of standardized pheno data (csv)")
+parser$add_argument("-o", "--outprefix", help="Output file prefix")
+args=parser$parse_args()
+# setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/0_Phenotypes/')  # Debug working directory
+# args=parser$parse_args(c("-i","0b_phenos.2025.filtered.csv",
+#                          "-o",'99_tmp'))
 
-# Load metadata
-metadata = readRDS("1_parsed_files/1a_asv_table_no_taxa_from_blanks.phyloseq.rds") %>% 
-  sample_data() %>%
-  data.frame() %>%
-  rownames_to_column("SampleID")
+cat("Finding best transformation of data in", args$infile,"by box-cox\n")
+cat("\tNote: All values will be rescaled to range of 1-100 to make more effective\n")
+phenos = read.csv(args$infile)
 
-# Read and preprocess pathway descriptions
-pathway_description <- read.table(pathway_file, sep = "\t", header = TRUE, check.names = TRUE, row.names = 1)
-colnames(pathway_description) <- gsub("\\.", "-", colnames(pathway_description))
-fraction_missing = rowSums(pathway_description == 0)/ncol(pathway_description)
-pathway_description <- pathway_description[fraction_missing <= max_sample_missing, ]
-pathways = rownames(pathway_description)
+# Get list of traits
+metacols = c("Taxa", "TRT") # Metadata columns
+traits = names(phenos) %>% 
+  setdiff(metacols) %>%
+  sort()
 
-# Prepare pathway data
-input_pathway_table <- t(pathway_description) %>% as.data.frame()
-input_pathway_table$SampleID <- rownames(input_pathway_table)
-input_pathway_table_metadata <- inner_join(input_pathway_table, metadata, by = "SampleID")
-
-# Linear regression on each pathway (old method)
-# lm_results <- lapply(input_pathway_table_metadata[, pathways],
-#                      function(x) lm(x ~ location + Corrected_pedigree + location:Corrected_pedigree, data = input_pathway_table_metadata))
-
-# DEPRECATED BECAUSE boxcox requires all model elements still there apparently
-# # Linear regression on each pathway (new method, more control)
-# pathway_regression = function(mypath, mydata){
-#   mydata = mydata[,c(mypath, "location", "Corrected_pedigree")] %>%
-#     mutate(interaction=paste(location, Corrected_pedigree, sep="|"))
-#   myformula = paste("`", mypath, "` ~ location + Corrected_pedigree + interaction", sep='')
-#   mymodel = lm(myformula, data = mydata)
-#   return(mymodel)
-# }
-# lm_results <- lapply(pathways, pathway_regression, mydata=input_pathway_table_metadata)
-# names(lm_results) = pathways
+# Make data long and split into subsets based on trait and treatment
+longdata = phenos %>%
+  pivot_longer(cols=all_of(traits), names_to="trait", values_to="value")
+subsets =split(longdata, f=list(longdata$TRT, longdata$trait))
 
 # Fit linear model before and after boxcox transformation to each variable
-pathways_transformed = input_pathway_table_metadata
-lm_results=list()
-lm_boxcox=list()
-for(mypath in pathways){
-  # Initial regression
-  mydata = input_pathway_table_metadata[,c(mypath, "location", "Corrected_pedigree")] %>%
-    mutate(interaction=paste(location, Corrected_pedigree, sep="|"))
-  mydata[,mypath] = mydata[,mypath] - min(mydata[,mypath]) + 1 # Make sure is positive for boxcox
-  myformula = paste("`", mypath, "` ~ location + Corrected_pedigree + interaction", sep='')
-  lm_results[[mypath]] = lm(myformula, data = mydata)
+transformed = list()
+for(i in 1:length(subsets)){ # Have to do a for loop b/c boxcox issue
+  # Make sure response data is positive
+  mydata = subsets[[i]]
+  mydata = subset(mydata, !is.na(mydata$value)) # Remove missing data
+  mydata$value_trans = rescale(mydata$value, to=c(1,100)) # Rescale so values are between 1 and 100 so boxcox works well
+  mymodel = lm("value_trans ~ 1", data = mydata)
   
   # Determine best boxcox transformation
-  bc = boxcox(lm_results[[mypath]], lambda=seq(-2, 2, 0.05), plotit = FALSE)
+  bc = boxcox(mymodel, lambda=seq(-4, 4, 0.05), plotit = FALSE)
   best = which.max(bc$y)
   lambda = bc$x[best]
   
   # Transform data
-  x = mydata[,mypath]
-  pathways_transformed[,mypath] = (x ^ lambda - 1)/x
+  if(lambda == 0){
+    mydata$value_trans = log(mydata$value_trans)
+  }else{
+    mydata$value_trans = (mydata$value_trans ^ lambda - 1)/lambda
+  }
+  mydata$lambda = lambda
+  transformed[[i]] = mydata
+}
+transformed = bind_rows(transformed)
+
+#########
+# Diagnostic histograms before and afterward
+#########
+
+cat("Making diagnostic plots\n")
+
+# Function to make all diagnostic plots for a specific trait
+make_plots = function(mytrait){
   
-  # Rerun regression
-  mydata[,mypath] = pathways_transformed[,mypath]
-  lm_boxcox[[mypath]] = lm(myformula, data = mydata)
-  #break
+  mydata = subset(transformed, trait==mytrait)
+  
+  # Raw histogram
+  hist.orig = ggplot(mydata) +
+    aes(x=value, fill=TRT) +
+    geom_histogram(bins=30) +
+    facet_wrap(~ TRT, nrow=1, scales="free_x") +
+    labs(title=paste(mytrait, " - Original data"))
+  
+  # Filtered histogram
+  lambdas = mydata %>%
+    dplyr::select(TRT, lambda) %>%
+    unique() %>%
+    mutate(label = paste("λ =", lambda))
+  hist.trans = ggplot(mydata) +
+    aes(x=value_trans, fill=TRT) +
+    geom_histogram(bins=30) +
+    geom_text(data=lambdas, mapping=aes(label=label), x=-Inf, y=Inf,
+              hjust=-0.1, vjust=1.5) +
+    facet_wrap(~ TRT, nrow=1, scales="free_x") +
+    labs(title=paste(mytrait, " - Boxcox-transformed"))
+  
+  # Arrange together
+  myplots = ggarrange(hist.orig, hist.trans)
+  return(myplots)
 }
 
-# Output diagnostic plots of before and after transofrmation
-set.seed(1)
-diagnostics = sample(pathways, size=n_diagnostics, replace=FALSE) %>% sort()
-diag_data = lapply(diagnostics, function(mypath){
-#for(mypath in diagnostics){
-  raw = data.frame(pathway=mypath, set="raw", value=input_pathway_table_metadata[,mypath])
-  raw_resid = data.frame(pathway=mypath, set="raw_residuals", value=residuals(lm_results[[mypath]]))
-  trans = data.frame(pathway=mypath, set="trans", value=pathways_transformed[,mypath])
-  trans_resid = data.frame(pathway=mypath, set="trans_residuals", value=residuals(lm_boxcox[[mypath]]))
-  return(bind_rows(raw, raw_resid, trans, trans_resid))
-}) %>% bind_rows()
-diplot = ggplot(diag_data) +
-  aes(x=value, fill=set) +
-  geom_histogram(bins=40) +
-  facet_wrap(pathway ~ set, scales="free", ncol=4) +
-  theme(axis.text.x = element_text(angle=90, vjust=0.5),
-        legend.position = "none")
-ggsave(diplot, file="3_GxE/3e_MetaCyc_pathway_GXE.diagnostics.png",
-       height = n_diagnostics*2, width = 6)
+# Combine and output
+allplots = lapply(traits, make_plots)
+combined = ggarrange(plotlist=allplots, ncol=1) # 1 column so all get stacked on top of each other
+ggsave(combined, file=paste(args$outprefix, ".trans_plots.png", sep=""),
+       width=8, height=2 * length(allplots), limitsize = FALSE, dpi=200)
 
 
-# ANOVA of results
-#####anova_results <- lapply(lm_results, anova)  # Don't use raw results
-anova_results <- lapply(lm_boxcox, anova)  # Use boxcox-transformed instead
+##############
+# Output transformed data
+###############
 
-# Calculate heritabilities
-herits = lapply(names(anova_results), function(mypathway){
-  myanova = anova_results[[mypathway]]
-  herit = myanova %>% 
-    data.frame() %>%
-    rename("SS" = "Sum.Sq", "pval" = "Pr..F.") %>%  # Rename
-    dplyr::select(SS, pval) %>%
-    rownames_to_column("term") %>%
-    mutate(herit = SS / sum(SS)) %>% # Calculate heritability
-    filter(term != "Residuals") %>% # Remove residuals
-    mutate(term = sapply(term, switch, "location"="Environment",
-                         "Corrected_pedigree" = "Maize Genotype",
-                         #"location:Corrected_pedigree" = "GXE"),
-                         "interaction" = "GXE"),
-           pathway=mypathway) %>%
-    relocate(pathway)
-  return(herit)
-}) %>%
-  bind_rows() %>%
-  mutate(fdr = p.adjust(pval, method = "fdr"))
+outdata = transformed %>%
+  dplyr::select(-value, -lambda) %>%
+  pivot_wider(id_cols = all_of(metacols), names_from="trait", values_from="value_trans")
+write.csv(outdata, file=paste(args$outprefix, ".transformed.csv", sep=""), row.names=FALSE)
 
-# Calculate fractions that are significant
-significant = herits %>%
-  group_by(term) %>%
-  summarize(n=n(),
-            n_significant = sum(fdr < fdr_cutoff),
-            fraction = n_significant/n) %>%
-  mutate(percent = round(fraction*100, digits=1) %>% paste("% sig."),
-         n_significant = paste("n =", n_significant))
+lamdbavals = transformed %>%
+  dplyr::select(trait, TRT, lambda) %>%
+  unique() %>%
+  mutate(lambda = round(lambda, digits=3)) # Taking care of a floating point display error
+write.csv(lamdbavals, file=paste(args$outprefix, ".transformed.lambdas.csv", sep=""), row.names=FALSE)
 
-# violin plot helper function
-make_herit_plot = function(myherits){
-  ggplot(myherits) +
-    aes(x = term, y = herit, fill = term) +
-    geom_violin(trim = TRUE) +
-    theme_minimal() +
-    theme(
-      legend.position = "none",
-      axis.title.x = element_blank(),
-      axis.title.y = element_text(size = 14),
-      axis.text = element_text(size = 12)
-    ) +
-    labs(x="", y="Heritability") + 
-    stat_summary(fun = mean, geom = "crossbar", width = 0.2, color = "black") 
-}
-
-# Make violin plot  
-heritability_plot = make_herit_plot(herits)+
-  geom_text(data=significant, mapping=aes(label=percent), y=max(herits$herit))
-heritability_plot.significant = make_herit_plot(herits %>% filter(fdr <= fdr_cutoff))+
-  geom_text(data=significant, mapping=aes(label=n_significant), y=max(herits$herit))
- 
-
-# Save data & plots
-ggsave(heritability_plot, file="3_GxE/3e_MetaCyc_pathway_GXE.png", height = 10, width = 10, device = "png")
-ggsave(heritability_plot.significant, file="3_GxE/3e_MetaCyc_pathway_GXE.significant_only.png", height = 4, width = 4, device = "png")
-write.csv(herits, file="3_GxE/3e_MetaCyc_pathway_GXE.csv", row.names=FALSE)
-
-
-
-# Save summary table of significance & variance explained
-medians = herits %>%
-  group_by(term) %>%
-  summarize(median_herit = median(herit))
-medians.sig = herits %>%
-  filter(fdr <= fdr_cutoff) %>%
-  group_by(term) %>%
-  summarize(median_herit_significant_only = median(herit))
-
-# Output summary table
-outsummary = significant %>%
-  left_join(medians, by="term") %>%
-  left_join(medians.sig, by="term")
-write.csv(outsummary, file="3_GxE/3e_MetaCyc_pathway_GXE.summary.csv", row.names=FALSE)
