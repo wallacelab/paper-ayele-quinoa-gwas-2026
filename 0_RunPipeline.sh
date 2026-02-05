@@ -42,7 +42,10 @@ if [[ ! -e $gwasdir ]] ; then mkdir $gwasdir; fi
 # TODO - Do programmatic cleaning of all data (outliers, boxcox transform, etc)
 # TODO - Run GWAS on all data
 problems2024="PhiPS52 ETR52 VPD47 VPD52 VPD56 VPD60 VPD70 VPD82 Tleaf40 Tleaf47 Tleaf52 Tleaf56 Tleaf60 Tleaf70"  # Problematic traits in 2024 greenhouse; first 61 rows of TRT1 often messed up
-bash $scriptdir/0_CleanPhenos.sh $scriptdir $phenodir "$problems2024"  # Note: a lot of needed files, etc. included in script instead of passing by argument
+problems2025="E66 ETR66 Tleaf39 Tleaf60 Tleaf66 Tleaf75 VPD66 VPD75"
+prob_min_row=1  # All problems in first 61 rows
+prob_max_row=61 # All problems in first 61 rows
+bash $scriptdir/0_CleanPhenos.sh $scriptdir $phenodir "$problems2024" "$problems2025" $prob_min_row $prob_max_row  # Note: a lot of needed files, etc. included in script instead of passing by argument
 
 
 # # Basic quality control (fastqc, multiqc, adaptor trimming, etc. Looking at one of CD Genomics' BAM files, everything was still 144 bp, so no adapter trimming?)

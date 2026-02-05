@@ -1,44 +1,54 @@
 #! /usr/bin/Rscript
 
-# Check and unify genotype and phenotype files
+# Clean phenotype files and do QC analysis
 library(argparse)
 library(tidyverse)
-library(emmeans)
-library(gvlma)
-library(ggpubr)
 library(performance)
+library(emmeans)
+library(ggpubr)
 
 # Arguments
 parser=ArgumentParser()
-parser$add_argument("-i", "--infile", help="Input file of phenotype data (csv)")
+parser$add_argument("-i", "--infile", help="Input file of standardized pheno data (csv)")
 parser$add_argument("-o", "--outprefix", help="Output file prefix")
-parser$add_argument("-p", "--problem-traits", nargs="*", help="Traits that show a specific problem in TRT 1 in the first 61 entries")
+parser$add_argument("-p", "--problem-traits", nargs="*", help="Traits that show a specific problem")
+parser$add_argument("-m", "--prob-min-row", type="integer", default=0, help="Min row to filter out from Problem traits")
+parser$add_argument("-x", "--prob-max-row", type="integer", default=0, help="Max row to filter out from Problem traits")
 args=parser$parse_args()
-# setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/')  # Debug working directory
-# args=parser$parse_args(c("-i","0_Phenotypes/2024_Greenhouse data.csv",
+# setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/0_Phenotypes/')  # Debug working directory
+# args=parser$parse_args(c("-i","0a_phenos.2024.csv",
 #                          "-p", "PhiPS52", "ETR52", "VPD47",
+#                          "-m", "1", "-x", "10",
 #                          "-o",'99_tmp'))
 
 
 # Load data
-cat("Loading raw data to convert to BLUEs\n")
-problem_rows = 1:61
-raw=read.csv(args$infile) %>%
-  mutate(Taxa = as.character(Taxa), ENTRY=as.character(ENTRY), TRT=as.character(TRT)) # Make characters so treated as factors
-metacols = c("Taxa", "ENTRY", "TRT") # Metadata columns
-traits = names(raw) %>% setdiff(metacols) # Get list of traits
+cat("Doing quality control on data from",args$infile,"\n")
+raw = read.csv(args$infile) %>%
+  mutate(Taxa = as.character(Taxa))
+
+# Get list of traits
+metacols = c("Taxa", "TRT") # Metadata columns
+traits = names(raw) %>% 
+  setdiff(metacols) %>%
+  sort()
+
+# Alphabetize traits (makes diagnostics easier to compare)
+adjusted = raw %>%
+  relocate(all_of(metacols), all_of(traits))
 
 ################
-# Basic Cleaning - NOTE: This done after consulting the resulting diagnostic plots
+# Basic Cleaning
 ################
 
 
 cat("Checking for outliers\n")
 
 # Clean traits where first bit of TRT1 always shows a problem
-cat("Removing problem values for", args$problem_traits, "\n")
-adjusted = raw
 if(length(args$problem_traits)>0){
+  cat("Removing problem values for", args$problem_traits, "in rows",
+      args$prob_min_row, "to", args$prob_max_row, "\n")
+  problem_rows = args$prob_min_row:args$prob_max_row
   adjusted[problem_rows, args$problem_traits] = NA
 }
 
@@ -88,17 +98,19 @@ blues = blues %>%
   reduce(full_join, by="Taxa") # Combine into a single data frame
 
 # Output BLUEs in csv format (wait on GAPIT format until after boxcox trans, etc.)
-write.csv(blues, file=paste(args$outprefix, ".csv", sep=""), row.names=FALSE)
+write.csv(filtered, file=paste(args$outprefix, ".filtered.csv", sep=""), row.names=FALSE)
+write.csv(blues, file=paste(args$outprefix, ".blues.csv", sep=""), row.names=FALSE)
 # blues.gapit = blues %>% rename("<Taxa>" = "Taxa")
 # write.table(blues.gapit, file=paste(args$outprefix, ".gapit.txt", sep=""), row.names=FALSE,
 #             col.names=TRUE, sep='\t', quote=FALSE)
+
 
 
 ##############
 # Diagnostic plots
 ##############
 
-cat("Outputting diagnostic plots\n")
+cat("Outputting diagnostic plots (and flagging any problems in TRT1)\n")
 
 # Make tidy data for plotting
 raw.plotdata = raw %>%
@@ -122,7 +134,7 @@ make_plots = function(mytrait){
   # Find problematic ones in TRT 1
   if(mytrait %in% args$problem_traits){
     problems = subset(outliers, outliers$Taxa %in% raw$Taxa[problem_rows] &
-                      outliers$TRT=="1")
+                        outliers$TRT=="TRT1")
   }else{
     problems=outliers[FALSE,] # 0-row data frame
   }
@@ -191,7 +203,7 @@ make_plots = function(mytrait){
   #   lims(x=c(-1, 2.5), y=c(0,6)) +
   #   scale_color_manual(values=c("Yes"="darkblue", "NO"= "darkred")) +
   #   labs(title="GVLMA tests (with p-value and decision)")
-    
+  
   # Arrange together
   #myplots = ggarrange(scatter.raw, hist.raw, scatter.blues, hist.blues, testplot,
   myplots = ggarrange(scatter.raw, hist.raw, scatter.filt, hist.filt, scatter.blues, hist.blues,
@@ -208,5 +220,4 @@ allplots = lapply(traits, make_plots)
 combined = ggarrange(plotlist=allplots, ncol=1) # 1 column so all get stacked on top of each other
 ggsave(combined, file=paste(args$outprefix, ".diagnistics.png", sep=""),
        width=20, height=3 * length(allplots), limitsize = FALSE, dpi=200)
-
 
