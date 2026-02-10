@@ -56,12 +56,14 @@ if(length(args$problem_traits)>0){
 
 # Use the performance package to check for outliers; since detects row-wise, split by trait
 longdata = adjusted %>%
-  pivot_longer(cols=all_of(traits), names_to="trait", values_to="value")
+  pivot_longer(cols=all_of(traits), names_to="trait", values_to="value") %>%
+  mutate(set = paste(trait, TRT, sep="|"))
 # Clean via outlier detection
 cat("\tFiltering outliers based on IQR cutoff",args$iqr_cutoff,"and z-score cutoff", args$zscore_cutoff, "\n")
-cleaned = lapply(traits, function(t){
+sets = unique(longdata$set)
+cleaned = lapply(sets, function(s){
   mydata = longdata %>% 
-    filter(trait==t) %>%
+    filter(set==s) %>%
     filter(!is.na(value))  # Remove missing values from above; will be restored on pivot_wider()
   outliers = check_outliers(mydata, method=c("zscore", "iqr", "mcd"),
                             threshold = list(iqr=args$iqr_cutoff, zscore=args$zscore_cutoff)) %>%
@@ -71,6 +73,7 @@ cleaned = lapply(traits, function(t){
 })
 filtered = cleaned %>%
   bind_rows() %>%
+  select(-set) %>%
   pivot_wider(id_cols = all_of(metacols), names_from="trait", values_from="value")
 
 #################

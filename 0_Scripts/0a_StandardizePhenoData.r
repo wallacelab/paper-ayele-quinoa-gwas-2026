@@ -31,7 +31,7 @@ raw2024=read.csv(args$infile) %>%
 # Load & Process 2025 data - INCLUDES SPECIFICS OF WHICH SHEET TO LOAD
 cat("Standardizing 2025 data\n")
 raw.seed = read.xlsx(args$seedfile, sheet="Sheet1") %>%
-  rename("Taxa" = `Plot#`, "seed_weight_g" = `Seed.wt..(g)`) %>%
+  rename("Taxa" = `Plot#`, "Seedweight" = `Seed.wt..(g)`) %>%
   mutate(TRT=paste("TRT", TRT, sep="")) # Standardize with phys traits
 # Read individual sheets (not combined)
 phys.sheets = c("TRT1", "TRT2", "TRT3")

@@ -9,6 +9,7 @@ problems2024="$3"
 problems2025="$4"
 prob_min_row=$5
 prob_max_row=$6
+priority_traits=$7  # Traits to prioritize analysis of
 
 ##################
 # 2024 greenhouse data
@@ -18,7 +19,6 @@ prob_max_row=$6
 # Rscript $scriptdir/0a_StandardizePhenoData.r -g "$workdir/2024_Greenhouse data.csv" -p "$workdir/2025-Physiological traits.xlsx" -s "$workdir/2025 Seed yield.xlsx" \
 #     -o $workdir/0a_phenos 
 
-# TODO - Redo outlier detection to operate on each TRT separately
 # TODO - Select target phenos and format for GAPIT?
 
 # # First pass clean each individually, including outputting QC plots and saving filtered data. Outlier detection is light because of wanting to transform later & re-filter
@@ -29,22 +29,22 @@ prob_max_row=$6
 # Rscript $scriptdir/0b_CleanPhenoData.r -i $workdir/0a_phenos.2025.csv -p $problems2025 --prob-min-row $prob_min_row --prob-max-row $prob_max_row \
 #     --iqr-cutoff $iqr --zscore-cutoff $zscore -o $workdir/0b_phenos.2025
 
-# # Boxcox and heavier transform. Problems already done, so can do in a loop
-# for set in 2024 2025; do
+# Boxcox and heavier cleaning. Year-specific problems already done, so can do in a loop
+iqr=1.7
+zscore=3
+for set in 2024 2025; do
+    
+#     # Boxcox transform
 #     Rscript $scriptdir/0c_TransformPhenos.r -i $workdir/0b_phenos.$set.filtered.csv -o $workdir/0c_phenos.$set.filtered
 #     
-#     # Heavy outlier filtering
-#     iqr=1.7
-#     zscore=3
+#     # Heavy outlier filtering  
 #     Rscript $scriptdir/0b_CleanPhenoData.r -i $workdir/0c_phenos.$set.filtered.transformed.csv \
 #         --iqr-cutoff $iqr --zscore-cutoff $zscore -o $workdir/0d_phenos.$set.clean
-# done
+        
+    # Format for GAPIT
+    Rscript $scriptdir/0e_FormatPhenosForGapit.r -i $workdir/0d_phenos.$set.clean.filtered.csv -o $workdir/0e_phenos.$set --priority-traits $priority_traits
+done
 
 
 
 
-# Boxcox transform everything then re-filter for outliers
-
-
-
-# TODO - Remove BLUEs? Nah, just keep them in and don't worry about them.

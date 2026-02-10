@@ -18,6 +18,7 @@ git add 0_Scripts/*.yml # Conda environment exports
 git add 0_Scripts/*.csv
 git add 0_Phenotypes/0a*.csv # Initial (raw) data
 git add 0_Phenotypes/*clean.csv  # Cleaned data after removing outliers and doing boxcox transformation
+git add 0_Phenotypes/*gapit.txt  # GAPIT-formatted phenotype files
 
 # Add key intermediate files
 git add 3_GWAS/3e_Results*/*.csv
