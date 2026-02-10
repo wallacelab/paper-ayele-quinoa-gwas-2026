@@ -9,7 +9,7 @@ problems2024="$3"
 problems2025="$4"
 prob_min_row=$5
 prob_max_row=$6
-priority_traits=$7  # Traits to prioritize analysis of
+priority_traits="$7"  # Traits to prioritize analysis of
 
 ##################
 # 2024 greenhouse data
