@@ -16,11 +16,15 @@ resample_fraction=$8 # Resample fraction number
 perm_p_cutoff="$9"  # P-value cutoff for permutations to count as null "hits"
 rmip_cutoff="${10}" # RMIP cutoff for a hit to count as real
 genome=${11}
-num_cores=${12} # Number of CPU cores to use
+models="${12}" # Which models to run in GAPIT (BLINK, FarmCPU, etc)
+num_cores=${13} # Number of CPU cores to use
 
 # Manhattan plot parameters (not important enough to pass from master script)
 winsize=5e6
 step=5e5
+
+# Make output directory if don't have yet
+if [[ ! -e $workdir ]] ; then mkdir $workdir; fi
 
 ########
 # Conda envs
@@ -34,28 +38,28 @@ conda_samtools=samtools-1.16.1
 . $(conda info --root)/etc/profile.d/conda.sh 
 
 
-###########
-# Setup
-###########
-
-# Convert genotypes to numeric & generate kinship matrix
-conda activate $conda_tassel5
-run_pipeline.pl -h $genos -NumericalGenotypePlugin -endPlugin -export $workdir/3a_genos.numeric.txt -exportType ReferenceProbability
-run_pipeline.pl -h $genos -KinshipPlugin -endPlugin -export $workdir/3a_kinship.txt
-
-
-# Extract genotype coordinates for GAPIT map file
-echo -e "SNP\tChromosome\tPosition" > $workdir/3a_genos.map.txt
-zcat $genos | tail -n +2 | cut -f1,3,4  >>  $workdir/3a_genos.map.txt
-
-# Combine and check
-Rscript $scriptdir/3a_CombineAndCheckData.r --genofile $workdir/3a_genos.numeric.txt --phenofile $phenos --outprefix $workdir/3a
-
-
-###########
-# Permutations for p-value cutoffs
-###########
-
+# ###########
+# # Setup
+# ###########
+# 
+# # Convert genotypes to numeric & generate kinship matrix
+# conda activate $conda_tassel5
+# run_pipeline.pl -h $genos -NumericalGenotypePlugin -endPlugin -export $workdir/3a_genos.numeric.txt -exportType ReferenceProbability
+# run_pipeline.pl -h $genos -KinshipPlugin -endPlugin -export $workdir/3a_kinship.txt
+# 
+# 
+# # Extract genotype coordinates for GAPIT map file
+# echo -e "SNP\tChromosome\tPosition" > $workdir/3a_genos.map.txt
+# zcat $genos | tail -n +2 | cut -f1,3,4  >>  $workdir/3a_genos.map.txt
+# 
+# # Combine and check
+# Rscript $scriptdir/3a_CombineAndCheckData.r --genofile $workdir/3a_genos.numeric.txt --phenofile $phenos --outprefix $workdir/3a
+# 
+# 
+# ###########
+# # Permutations for p-value cutoffs
+# ###########
+# 
 # # Get list of traits
 # traits=`head -n 1 $workdir/3a_phenos.csv | tr ',' '\n' | tail -n +2 | tr '"' ' '`
 # 
@@ -66,7 +70,7 @@ Rscript $scriptdir/3a_CombineAndCheckData.r --genofile $workdir/3a_genos.numeric
 # kinfile=$workdir/3a_kinship.txt
 #  
 # # Loop over models
-# for model in FarmCPU BLINK; do
+# for model in $models; do
 # 
 #     # Make subdirectories
 #     permdir=$workdir/3b_Permutations.$model
@@ -124,14 +128,14 @@ Rscript $scriptdir/3a_CombineAndCheckData.r --genofile $workdir/3a_genos.numeric
 # zcat $genome > $workdir/tmp_genome.fa
 # samtools faidx $workdir/tmp_genome.fa --fai-idx $workdir/3f_genome_index.txt
 # rm $workdir/tmp_genome.fa
-# 
-# # Plot combined Manhattan plots
-# for model in FarmCPU BLINK; do
-#     for perm_p in $perm_p_cutoff; do
-#         for rmip_cut in $rmip_cutoff; do
-#             Rscript $scriptdir/3f_MakeManhattanPlots.r -i $workdir/3e_Results.$model/*p$perm_p.rmip$rmip_cut.csv --winsize $winsize --step $step --drop-contigs \
-#                 --index $workdir/3f_genome_index.txt --rmip-cutoff $rmip_cutoff -o $workdir/3f_manahttans.$model.p$perm_p.rmip$rmip_cut
-#         done
-#     done
-# done
+
+# Plot combined Manhattan plots
+for model in $models; do
+    for perm_p in $perm_p_cutoff; do
+        for rmip_cut in $rmip_cutoff; do
+            Rscript $scriptdir/3f_MakeManhattanPlots.r -i $workdir/3e_Results.$model/*p$perm_p.rmip$rmip_cut.csv --winsize $winsize --step $step --drop-contigs \
+                --index $workdir/3f_genome_index.txt --rmip-cutoff $rmip_cutoff -o $workdir/3f_manahttans.$model.p$perm_p.rmip$rmip_cut
+        done
+    done
+done
 

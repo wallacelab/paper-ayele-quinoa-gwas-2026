@@ -21,8 +21,8 @@ git add 0_Phenotypes/*clean.csv  # Cleaned data after removing outliers and doin
 git add 0_Phenotypes/*gapit.txt  # GAPIT-formatted phenotype files
 
 # Add key intermediate files
-git add 3_GWAS/3e_Results*/*.csv
-git add 3_GWAS/3f_genome_index.txt
+git add 3_GWAS/*/3e_Results*/*.csv
+git add 3_GWAS/*/3f_genome_index.txt
 
 # Add output SVGs
 

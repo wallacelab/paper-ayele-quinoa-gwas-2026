@@ -37,17 +37,17 @@ if [[ ! -e $qcdir ]] ; then mkdir $qcdir; fi
 if [[ ! -e $snpdir ]] ; then mkdir $snpdir; fi
 if [[ ! -e $gwasdir ]] ; then mkdir $gwasdir; fi
 
-# Combine phenotypes for years 2024 and then 2025
-# TODO - Run GWAS on all data
-problems2024="PhiPS52 ETR52 VPD47 VPD52 VPD56 VPD60 VPD70 VPD82 Tleaf40 Tleaf47 Tleaf52 Tleaf56 Tleaf60 Tleaf70"  # Problematic traits in 2024 greenhouse; first 61 rows of TRT1 often messed up
-problems2025="E66 ETR66 Tleaf39 Tleaf60 Tleaf66 Tleaf75 VPD66 VPD75"
-prob_min_row=1  # All problems in first 61 rows
-prob_max_row=61 # All problems in first 61 rows
-priority_traits="GSW PhiPS ETR PH DBI Seedweight" # Priority traits to focus on. Assuming PH = Plant Height, DBI = Bud Initiation.
-bash $scriptdir/0_CleanPhenos.sh $scriptdir $phenodir "$problems2024" "$problems2025" $prob_min_row $prob_max_row "$priority_traits" # Note: a lot of needed files, etc. included in script instead of passing by argument
+
+# # Clean and format phenotype data
+# problems2024="PhiPS52 ETR52 VPD47 VPD52 VPD56 VPD60 VPD70 VPD82 Tleaf40 Tleaf47 Tleaf52 Tleaf56 Tleaf60 Tleaf70"  # Problematic traits in 2024 greenhouse; first 61 rows of TRT1 often messed up
+# problems2025="E66 ETR66 Tleaf39 Tleaf60 Tleaf66 Tleaf75 VPD66 VPD75"
+# prob_min_row=1  # All problems in first 61 rows
+# prob_max_row=61 # All problems in first 61 rows
+# priority_traits="GSW PhiPS ETR PH DBI Seedweight" # Priority traits to focus on. Assuming PH = Plant Height, DBI = Bud Initiation.
+# bash $scriptdir/0_CleanPhenos.sh $scriptdir $phenodir "$problems2024" "$problems2025" $prob_min_row $prob_max_row "$priority_traits" # Note: a lot of needed files, etc. included in script instead of passing by argument
 
 
-# # Basic quality control (fastqc, multiqc, adaptor trimming, etc. Looking at one of CD Genomics' BAM files, everything was still 144 bp, so no adapter trimming?)
+# # Basic genotype quality control (fastqc, multiqc, adaptor trimming, etc. Looking at one of CD Genomics' BAM files, everything was still 144 bp, so no adapter trimming?)
 # # NOTE: Not trimming off after a second cut site; will rely on chimera detection to filter those out
 # adapters=$scriptdir/adapters.fa
 # echo "" | cat $adapterdir/TruSeq3-PE-2.fa - $adapterdir/NexteraPE-PE.fa > $adapters  # Echo part is to put a newline between the files; using both to be conservative. Nextera transposon seqs definitely present.
@@ -74,7 +74,8 @@ bash $scriptdir/0_CleanPhenos.sh $scriptdir $phenodir "$problems2024" "$problems
 #     $company_diversity $num_cores
 
 
-# # Run GWAS with GAPIT 
+# # Run GWAS with GAPIT - INITIAL ANALYSIS
+# workdir=$gwasdir/Initial
 # #genos=$scriptdir/mdp_genotype.short.hmp.txt.gz  # DEBUG Shorter version with 1k sites to debug quickly
 # genos=$scriptdir/mdp_genotype.hmp.txt.gz  # Genotype file from Step 2, modified by coauthor to remove contigs and rename chromosomes
 # phenos=$phenodir/mdp_traits.txt  # Phenotype file
@@ -84,7 +85,35 @@ bash $scriptdir/0_CleanPhenos.sh $scriptdir $phenodir "$problems2024" "$problems
 # resample_fraction=0.9  # Resample fraction number
 # perm_p_cutoff="0.05 0.01"  # P-value cutoffs for permutations to count as null "hits"; make a single string with space delimits among different options
 # rmip_cutoff="0.05" # RMIP cutoff for a hit to count as real; make a single string with space delimits among different options
-# bash $scriptdir/3_RunGapit.sh $scriptdir $gwasdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" $genome $num_cores
+# models="FarmCPU BLINK"
+# bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" $genome "$models" $num_cores
 
+#######################
+# Run GWAS with GAPIT - PUBLICATION ANALYSIS
+#######################
 
-# TODO - Copy above and rerun with 2024 data. Will need to collapse to BLUPs first, but then rerun above just in a separate subfolder
+# General values (Shared across all analyses
+genos=$scriptdir/mdp_genotype.hmp.txt.gz  # Genotype file from Step 2, modified by coauthor to remove contigs and rename chromosomes
+num_pcs=3   # Number of principal components to include
+num_perms=100   # Number of permutations to run to get null distribution of results
+num_resamples=100  # Number of resamples to run to get RMIPs
+resample_fraction=0.9  # Resample fraction number
+perm_p_cutoff="0.05 0.01"  # P-value cutoffs for permutations to count as null "hits"; make a single string with space delimits among different options
+rmip_cutoff="0.05" # RMIP cutoff for a hit to count as real; make a single string with space delimits among different options
+models="BLINK"
+
+# # Test data
+# phenos=$phenodir/test.txt  # Phenotype file
+# workdir=$gwasdir/Priorities2024
+# bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" $genome "$models" $num_cores
+
+# 2024 data
+phenos=$phenodir/0e_phenos.2024.priorities.gapit.txt  # Phenotype file
+workdir=$gwasdir/Priorities2024
+bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" $genome "$models" $num_cores
+
+# # 2025 data
+# phenos=$phenodir/0e_phenos.2025.priorities.gapit.txt  # Phenotype file
+# workdir=$gwasdir/Priorities2025
+# bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" $genome "$models" $num_cores
+

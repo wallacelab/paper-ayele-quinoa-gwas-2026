@@ -14,11 +14,10 @@ parser$add_argument("-o", "--outprefix", help="Output file prefix")
 parser$add_argument("-c", "--covariates", nargs="*", help="Which traits are the covariates")
 parser$add_argument("-r", "--remove-outliers", default=FALSE, action="store_true", help="Whether to remove outliers (using hardcoded section)")
 args=parser$parse_args()
-# setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/')  # Debug working directory
-# args=parser$parse_args(c("-p","0_Scripts/mdp_traits.txt",
-#                          "-g",'3_GWAS/3a_genos.numeric.txt',
-#                          "-o",'99_tmp',
-#                          "--remove-outliers"))
+# setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/3_GWAS/Priorities2024/')  # Debug working directory
+# args=parser$parse_args(c("-p","../../0_Phenotypes/0e_phenos.2024.priorities.gapit.txt",
+#                          "-g",'3a_genos.numeric.txt',
+#                          "-o",'99_tmp'))
 
 
 # Load data
@@ -44,13 +43,17 @@ shared = intersect(rownames(phenos), genos$taxa)
 display(shared, rownames(phenos), "trait")
 display(shared, genos$taxa, "genotype")
 
+# Reduce to only shared genotypes (otherwise rrBLUP will fail)
+cat("\tReducing to",length(shared),"shared taxa (otherwise rrBLUP will fail)\n")
+phenos = subset(phenos, rownames(phenos) %in% shared)
+genos = subset(genos, genos$taxa %in% shared)
+
 ## Experimental - test removing outliers ##
 if(args$remove_outliers){
   phenos$E56[phenos$E56 < 2.5] = NA
 }
-
-
 ## End Experimental section ##
+
 
 # Estimate heritabilities with rrBLUP
 cat("\tEstimating heritabilities with rrBLUP\n")
@@ -94,6 +97,8 @@ write.csv(outphenos, file=paste(args$outprefix, "_phenos.csv", sep=""), row.name
 genorange = range(genos[,-1], na.rm=TRUE)
 if(!identical(genorange, c(0,1))){
   stop("GENOTYPES NOT IN EXPECTED RANGE OF 0-1")
+}else{
+  cat("Converting genotypes from 0-1 range to 0-1-2 for GAPIT\n")
 }
 # Convert
 genos.gapit = genos %>%
