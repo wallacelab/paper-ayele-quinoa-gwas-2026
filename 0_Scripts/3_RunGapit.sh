@@ -17,14 +17,18 @@ perm_p_cutoff="$9"  # P-value cutoff for permutations to count as null "hits"
 rmip_cutoff="${10}" # RMIP cutoff for a hit to count as real
 genome=${11}
 models="${12}" # Which models to run in GAPIT (BLINK, FarmCPU, etc)
-num_cores=${13} # Number of CPU cores to use
+num_perms_glm=${13}  # Number of permutations for GLM empirical p-values
+glm_perm_p_cutoff=${14}  # Empirical p value cutoff to use for significance of GLMs
+num_cores=${15} # Number of CPU cores to use
 
 # Manhattan plot parameters (not important enough to pass from master script)
 winsize=5e6
 step=5e5
 
 # Make output directory if don't have yet
+tasseldir=$workdir/3g_TASSEL_GLM
 if [[ ! -e $workdir ]] ; then mkdir $workdir; fi
+if [[ ! -e $tasseldir ]] ; then mkdir $tasseldir; fi
 
 ########
 # Conda envs
@@ -129,13 +133,83 @@ conda_samtools=samtools-1.16.1
 # samtools faidx $workdir/tmp_genome.fa --fai-idx $workdir/3f_genome_index.txt
 # rm $workdir/tmp_genome.fa
 
-# Plot combined Manhattan plots
+# # Plot combined Manhattan plots
+# for model in $models; do
+#     for perm_p in $perm_p_cutoff; do
+#         for rmip_cut in $rmip_cutoff; do
+#             Rscript $scriptdir/3f_MakeManhattanPlots.r -i $workdir/3e_Results.$model/*p$perm_p.rmip$rmip_cut.csv --winsize $winsize --step $step --drop-contigs \
+#                 --index $workdir/3f_genome_index.txt --rmip-cutoff $rmip_cutoff -o $workdir/3f_manahttans.$model.p$perm_p.rmip$rmip_cut
+#         done
+#     done
+# done
+
+
+###############
+# GLM permutations for Manhattans with empirical p-values
+###############
+
+conda activate $conda_tassel5
+
+# # Quick scree plot to confirm number of PCs is correct; eigenvalues are in file 2
+# run_pipeline.pl -h $genos -distanceMatrix -MultiDimensionalScalingPlugin -axes 20 -endPLugin -export $tasseldir/3g_genos_mds.txt
+# Rscript -e "library(ggplot2); eigens=read.delim('$tasseldir/3g_genos_mds2.txt'); myplot = ggplot(eigens) + aes(x=PC, y=eigenvalue) + geom_point()" \
+#     -e "ggsave(myplot, file='$tasseldir/3g_genos_screeplot.png')"
+# 
+# # Take first num_pcs PCs to work with
+# num_cols=$(($num_pcs + 1))
+# cat $tasseldir/3g_genos_mds1.txt | cut -f 1-$num_cols | sed -r -e "s|^\S+/||g" > $tasseldir/3g_pcs.txt
+# 
+# # Fix genotype names so don't have path information
+# zcat $genos | head -n 1 | sed -r -e "s|\t\S+/|\t|g" > $tasseldir/3g_genos.fixnames.hmp.txt
+# zcat $genos | tail -n +21 >> $tasseldir/3g_genos.fixnames.hmp.txt
+# pigz $tasseldir/3g_genos.fixnames.hmp.txt
+# 
+# # # Reformat GAPIT phenos for TASSEL
+# cat $phenos | sed -r -e "s|<Taxa>|<Trait>|" > $tasseldir/3g_phenos.tassel.txt
+
+# # Split phenos for TASSEL
+ncols=`head -n 3 $tasseldir/3g_phenos.tassel.txt | tail -n 1 | tr '\t' '\n' | wc -l`
+# commands=$workdir/3g_tassel_commands.txt
+# echo "echo 'Starting GLM permutation analysis'" > $commands
+# for traitcol in `seq 2 $ncols`; do
+#     cut -f 1,$traitcol $tasseldir/3g_phenos.tassel.txt > $tasseldir/3g_phenos.tassel.$traitcol.txt
+#     
+#     echo "run_pipeline.pl -fork1 -h $tasseldir/3g_genos.fixnames.hmp.txt.gz -fork2 -t $tasseldir/3g_phenos.tassel.$traitcol.txt -fork3 -t $tasseldir/3g_pcs.txt \
+#         -combine4 -input1 -input2 -input3 -intersect \
+#         -FixedEffectLMPlugin -saveToFile false \
+#         -permute true -nperm $num_perms_glm -maxP 0.1 \
+#         -endPlugin \
+#         -export $tasseldir/3h_glm_results_$traitcol" >> $commands
+# done
+# cat $commands | parallel --progress
+ 
+# # Rename the TASSEL results so more intuitive, then zip
+# for traitcol in `seq 2 $ncols`; do
+#     mv $tasseldir/3h_glm_results_${traitcol}1.txt $tasseldir/3h_glm_results_$traitcol.sites.txt
+#     mv $tasseldir/3h_glm_results_${traitcol}2.txt $tasseldir/3h_glm_results_$traitcol.alleles.txt
+#     
+#     pigz $tasseldir/3h_glm_results_$traitcol.*.txt
+# done
+
+
+# Combine GLM results with RMIP results for final manhattan plots
 for model in $models; do
     for perm_p in $perm_p_cutoff; do
         for rmip_cut in $rmip_cutoff; do
-            Rscript $scriptdir/3f_MakeManhattanPlots.r -i $workdir/3e_Results.$model/*p$perm_p.rmip$rmip_cut.csv --winsize $winsize --step $step --drop-contigs \
-                --index $workdir/3f_genome_index.txt --rmip-cutoff $rmip_cutoff -o $workdir/3f_manahttans.$model.p$perm_p.rmip$rmip_cut
+             Rscript $scriptdir/3i_MakeCompositeManhattanPlots.r  --rmip-infiles $workdir/3e_Results.$model/*p$perm_p.rmip$rmip_cut.csv \
+                --winsize $winsize --step $step --rmip-cutoff $rmip_cutoff \
+                --glm-infiles $tasseldir/3h_glm_results_*.sites.txt.gz --pval-cutoff $glm_perm_p_cutoff \
+                -o $workdir/3i_combined_manahttans.$model.p$perm_p.rmip$rmip_cut 
         done
     done
 done
 
+# # # # # Run TASSEL with permutations
+# # # # run_pipeline.pl -fork1 -h $tasseldir/3g_genos.fixnames.hmp.txt.gz -fork2 -t $tasseldir/3g_phenos.tassel.txt -fork3 -t $tasseldir/3g_pcs.txt \
+# # # #     -combine4 -input1 -input2 -input3 -intersect \
+# # # #     -FixedEffectLMPlugin -saveToFile false \
+# # # #     -permute true -nperm $num_perms_glm -maxP 0.1 \
+# # # #     -endPlugin \
+# # # #     -export $tasseldir/3h_glm_results
+
+    

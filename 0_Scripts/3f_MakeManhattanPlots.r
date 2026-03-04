@@ -33,6 +33,7 @@ index=read.delim(args$index, header=FALSE,
 rmips = lapply(args$infiles, function(infile){
   farm = read.csv(infile)
 })
+cat("Plotting combined manhattan plots for", length(rmips), "results\n")
 
 # Assign trait names to rmip data
 traits = basename(args$infiles) %>%
@@ -124,5 +125,5 @@ manhattans = lapply(traits, plot_manhattan)
 # Arrange all plots and save
 outplot = ggarrange(plotlist=manhattans, ncol=1)
 ggsave(outplot, file=paste(args$outprefix, ".png", sep=""),
-       width=8, height=2*length(traits))
+       width=8, height=2*length(traits), dpi=100, limitsize=FALSE)
 

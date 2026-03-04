@@ -101,19 +101,23 @@ resample_fraction=0.9  # Resample fraction number
 perm_p_cutoff="0.05 0.01"  # P-value cutoffs for permutations to count as null "hits"; make a single string with space delimits among different options
 rmip_cutoff="0.05" # RMIP cutoff for a hit to count as real; make a single string with space delimits among different options
 models="BLINK"
+num_perms_glm=1000
+glm_perm_p_cutoff=0.05  # Empirical p value cutoff to use for significance of GLMs
 
 # # Test data
 # phenos=$phenodir/test.txt  # Phenotype file
 # workdir=$gwasdir/Priorities2024
 # bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" $genome "$models" $num_cores
 
-# 2024 data
-phenos=$phenodir/0e_phenos.2024.priorities.gapit.txt  # Phenotype file
-workdir=$gwasdir/Priorities2024
-bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" $genome "$models" $num_cores
+# # 2024 data 
+# phenos=$phenodir/0e_phenos.2024.priorities.gapit.txt  # Phenotype file
+# workdir=$gwasdir/Priorities2024
+# bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" \
+#     $genome "$models" $num_perms_glm $glm_perm_p_cutoff $num_cores
 
-# # 2025 data
-# phenos=$phenodir/0e_phenos.2025.priorities.gapit.txt  # Phenotype file
-# workdir=$gwasdir/Priorities2025
-# bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" $genome "$models" $num_cores
+# 2025 data
+phenos=$phenodir/0e_phenos.2025.priorities.gapit.txt  # Phenotype file
+workdir=$gwasdir/Priorities2025
+bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" \
+    $genome "$models" $num_perms_glm $glm_perm_p_cutoff $num_cores
 
