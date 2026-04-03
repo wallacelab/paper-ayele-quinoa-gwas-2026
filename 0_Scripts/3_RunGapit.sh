@@ -18,8 +18,7 @@ rmip_cutoff="${10}" # RMIP cutoff for a hit to count as real
 genome=${11}
 models="${12}" # Which models to run in GAPIT (BLINK, FarmCPU, etc)
 num_perms_glm=${13}  # Number of permutations for GLM empirical p-values
-glm_perm_p_cutoff=${14}  # Empirical p value cutoff to use for significance of GLMs
-num_cores=${15} # Number of CPU cores to use
+num_cores=${14} # Number of CPU cores to use
 
 # Manhattan plot parameters (not important enough to pass from master script)
 winsize=5e6
@@ -42,10 +41,10 @@ conda_samtools=samtools-1.16.1
 . $(conda info --root)/etc/profile.d/conda.sh 
 
 
-# ###########
-# # Setup
-# ###########
-# 
+###########
+# Setup
+###########
+
 # # Convert genotypes to numeric & generate kinship matrix
 # conda activate $conda_tassel5
 # run_pipeline.pl -h $genos -NumericalGenotypePlugin -endPlugin -export $workdir/3a_genos.numeric.txt -exportType ReferenceProbability
@@ -58,12 +57,12 @@ conda_samtools=samtools-1.16.1
 # 
 # # Combine and check
 # Rscript $scriptdir/3a_CombineAndCheckData.r --genofile $workdir/3a_genos.numeric.txt --phenofile $phenos --outprefix $workdir/3a
-# 
-# 
-# ###########
-# # Permutations for p-value cutoffs
-# ###########
-# 
+
+
+###########
+# Permutations for p-value cutoffs
+###########
+
 # # Get list of traits
 # traits=`head -n 1 $workdir/3a_phenos.csv | tr ',' '\n' | tail -n +2 | tr '"' ' '`
 # 
@@ -132,7 +131,7 @@ conda_samtools=samtools-1.16.1
 # zcat $genome > $workdir/tmp_genome.fa
 # samtools faidx $workdir/tmp_genome.fa --fai-idx $workdir/3f_genome_index.txt
 # rm $workdir/tmp_genome.fa
-
+# 
 # # Plot combined Manhattan plots
 # for model in $models; do
 #     for perm_p in $perm_p_cutoff; do
@@ -148,8 +147,8 @@ conda_samtools=samtools-1.16.1
 # GLM permutations for Manhattans with empirical p-values
 ###############
 
-conda activate $conda_tassel5
-
+# conda activate $conda_tassel5
+# 
 # # Quick scree plot to confirm number of PCs is correct; eigenvalues are in file 2
 # run_pipeline.pl -h $genos -distanceMatrix -MultiDimensionalScalingPlugin -axes 20 -endPLugin -export $tasseldir/3g_genos_mds.txt
 # Rscript -e "library(ggplot2); eigens=read.delim('$tasseldir/3g_genos_mds2.txt'); myplot = ggplot(eigens) + aes(x=PC, y=eigenvalue) + geom_point()" \
@@ -166,9 +165,9 @@ conda activate $conda_tassel5
 # 
 # # # Reformat GAPIT phenos for TASSEL
 # cat $phenos | sed -r -e "s|<Taxa>|<Trait>|" > $tasseldir/3g_phenos.tassel.txt
-
+# 
 # # Split phenos for TASSEL
-ncols=`head -n 3 $tasseldir/3g_phenos.tassel.txt | tail -n 1 | tr '\t' '\n' | wc -l`
+# ncols=`head -n 3 $tasseldir/3g_phenos.tassel.txt | tail -n 1 | tr '\t' '\n' | wc -l`
 # commands=$workdir/3g_tassel_commands.txt
 # echo "echo 'Starting GLM permutation analysis'" > $commands
 # for traitcol in `seq 2 $ncols`; do
@@ -182,7 +181,7 @@ ncols=`head -n 3 $tasseldir/3g_phenos.tassel.txt | tail -n 1 | tr '\t' '\n' | wc
 #         -export $tasseldir/3h_glm_results_$traitcol" >> $commands
 # done
 # cat $commands | parallel --progress
- 
+#  
 # # Rename the TASSEL results so more intuitive, then zip
 # for traitcol in `seq 2 $ncols`; do
 #     mv $tasseldir/3h_glm_results_${traitcol}1.txt $tasseldir/3h_glm_results_$traitcol.sites.txt
@@ -198,18 +197,12 @@ for model in $models; do
         for rmip_cut in $rmip_cutoff; do
              Rscript $scriptdir/3i_MakeCompositeManhattanPlots.r  --rmip-infiles $workdir/3e_Results.$model/*p$perm_p.rmip$rmip_cut.csv \
                 --winsize $winsize --step $step --rmip-cutoff $rmip_cutoff \
-                --glm-infiles $tasseldir/3h_glm_results_*.sites.txt.gz --pval-cutoff $glm_perm_p_cutoff \
+                --glm-infiles $tasseldir/3h_glm_results_*.sites.txt.gz --pval-cutoff $perm_p \
                 -o $workdir/3i_combined_manahttans.$model.p$perm_p.rmip$rmip_cut 
         done
     done
 done
 
-# # # # # Run TASSEL with permutations
-# # # # run_pipeline.pl -fork1 -h $tasseldir/3g_genos.fixnames.hmp.txt.gz -fork2 -t $tasseldir/3g_phenos.tassel.txt -fork3 -t $tasseldir/3g_pcs.txt \
-# # # #     -combine4 -input1 -input2 -input3 -intersect \
-# # # #     -FixedEffectLMPlugin -saveToFile false \
-# # # #     -permute true -nperm $num_perms_glm -maxP 0.1 \
-# # # #     -endPlugin \
-# # # #     -export $tasseldir/3h_glm_results
+
 
     

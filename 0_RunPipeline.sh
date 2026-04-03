@@ -43,7 +43,7 @@ if [[ ! -e $gwasdir ]] ; then mkdir $gwasdir; fi
 # problems2025="E66 ETR66 Tleaf39 Tleaf60 Tleaf66 Tleaf75 VPD66 VPD75"
 # prob_min_row=1  # All problems in first 61 rows
 # prob_max_row=61 # All problems in first 61 rows
-# priority_traits="GSW PhiPS ETR PH DBI Seedweight" # Priority traits to focus on. Assuming PH = Plant Height, DBI = Bud Initiation.
+# priority_traits="GSW PhiPS ETR PH DBI Seedweight DTM" # Priority traits to focus on. Assuming PH = Plant Height, DBI = Bud Initiation.
 # bash $scriptdir/0_CleanPhenos.sh $scriptdir $phenodir "$problems2024" "$problems2025" $prob_min_row $prob_max_row "$priority_traits" # Note: a lot of needed files, etc. included in script instead of passing by argument
 
 
@@ -113,11 +113,27 @@ glm_perm_p_cutoff=0.05  # Empirical p value cutoff to use for significance of GL
 # phenos=$phenodir/0e_phenos.2024.priorities.gapit.txt  # Phenotype file
 # workdir=$gwasdir/Priorities2024
 # bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" \
-#     $genome "$models" $num_perms_glm $glm_perm_p_cutoff $num_cores
+#     $genome "$models" $num_perms_glm $num_cores
 
-# 2025 data
-phenos=$phenodir/0e_phenos.2025.priorities.gapit.txt  # Phenotype file
-workdir=$gwasdir/Priorities2025
+# # 2025 data
+# phenos=$phenodir/0e_phenos.2025.priorities.gapit.txt  # Phenotype file
+# workdir=$gwasdir/Priorities2025
+# bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" \
+#     $genome "$models" $num_perms_glm $num_cores
+
+# # # 2025 data update (height, maturity, seed yield)
+# phenos=$phenodir/0e_phenos.2025_update.priorities.gapit.txt  # Phenotype file
+# workdir=$gwasdir/Priorities2025_update
+# bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" \
+#     $genome "$models" $num_perms_glm $num_cores
+
+# 2024 DTM (since wasn't originally done the first time)
+phenos=$phenodir/0e_phenos.2024.DTM.gapit.txt  # Phenotype file
+workdir=$gwasdir/Priorities2024_DTM
 bash $scriptdir/3_RunGapit.sh $scriptdir $workdir $genos $phenos $num_pcs $num_perms $num_resamples $resample_fraction "$perm_p_cutoff" "$rmip_cutoff" \
-    $genome "$models" $num_perms_glm $glm_perm_p_cutoff $num_cores
+    $genome "$models" $num_perms_glm $num_cores
 
+
+
+
+# TODO - Add legend, and fix issue where if cum RMIP goes a lot higher than individual ones, the rescale is incorrect

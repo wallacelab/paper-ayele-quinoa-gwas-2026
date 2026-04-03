@@ -10,22 +10,6 @@ library(gridExtra)
 library(ggpubr)
 library(grid)
 
-# # Phenotypes
-# pheno_name_key=c("Flowering Time" = "FLoweringtime",
-#                  "Greenhouse Damage" = "GHD",
-#                  "Plant Height (log)" = "Log_2019.2020_PH",
-#                  "D1 Aphid Count (log)" = "Log_D1_2019.2020AC",
-#                  "D1 Aphid Damage (log)" = "Log_D1_2019.2020",
-#                  "D2 Aphid Count (log)" = "Log_D2_2019.2020AC",
-#                  "D2 Aphid Damage (log)" = "Log_D2_2019.2020",
-#                  "NDRE" = "NDREAug25",
-#                  "NDVI" = "NDVIAug25",
-#                  "SAVI" = "SAVI_Aug25",
-#                  "NDRE (flowering covariate)" = "NDREAug25.with_flowering",
-#                  "NDVI (flowering covariate)" = "NDVIAug25.with_flowering",
-#                  "SAVI (flowering covariate)" = "SAVI_Aug25.with_flowering")
-
-
 # Arguments
 parser=ArgumentParser()
 # RMIP arguments
@@ -64,8 +48,6 @@ args=parser$parse_args()
 
 cat("Combining manhattan plots for", length(args$rmip_infiles), "RMIP files and",
     length(args$glm_infiles), "GLM files\n")
-# index = read.delim(args$index, header=FALSE) - DEPRECATED
-# names(index) = c("chr", "length", "byte_offset", "x1", "x2")
 
 # Load RMIP data
 load_rmip = function(infile){
@@ -263,9 +245,9 @@ get_plots = function(traits){
                nrow=2, heights=c(10,1), bottom=chrom_label, left=left_label, right=right_label)
 }
 
-# Plot trait groupings by stem 
+# Plot trait groupings by trait
 stems = c(names(glms), names(rmips)) %>%
-  sub(pattern="[_0-9].+", repl="") %>%
+  sub(pattern="_TRT[0-9]", repl="") %>%  # Group 3 treatments
   unique() %>%
   sort()
 # Loop over stems

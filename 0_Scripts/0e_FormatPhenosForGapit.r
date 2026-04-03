@@ -13,7 +13,7 @@ parser$add_argument("-p", "--priority-traits", nargs="*", help="Strings indicati
 parser$add_argument("-o", "--outprefix", help="Output file prefix")
 args=parser$parse_args()
 # setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/0_Phenotypes/')  # Debug working directory
-# args=parser$parse_args(c("-i","0d_phenos.2025.clean.filtered.csv",
+# args=parser$parse_args(c("-i","0d_phenos.2025_update.clean.filtered.csv",
 #                          "-p",'GSW', 'PhiPS',
 #                          "-o",'99_tmp'))
 
@@ -49,6 +49,9 @@ phenos.bottom = phenos[,c(metacols, notpicked)]
 # Combine trait and treatment
 trait_plus_treatment = function(mydata){
   mytraits = setdiff(names(mydata), metacols)
+  if(length(mytraits)==0){
+    return(data.frame(Taxa=NA))
+  }
   mydata = split(mydata, mydata$TRT)
   mydata = lapply(mydata, function(m){
     trt = unique(m$TRT)

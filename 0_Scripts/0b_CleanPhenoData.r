@@ -18,7 +18,7 @@ parser$add_argument("-q", "--iqr-cutoff", type="double", default=1.7, help="Cuto
 parser$add_argument("-z", "--zscore-cutoff", type="double", default=3, help="Cutoff for points to be considered an outlier by Zscore")
 args=parser$parse_args()
 # setwd('/home/jgwall/Projects/Misc/AddissuAyele_QuinoaGBS/0_Phenotypes/')  # Debug working directory
-# args=parser$parse_args(c("-i","0a_phenos.2024.csv",
+# args=parser$parse_args(c("-i","0a_phenos.2025_update.csv",
 #                          "-p", "PhiPS52", "ETR52", "VPD47",
 #                          "-m", "1", "-x", "10",
 #                          "-o",'99_tmp'))
@@ -64,7 +64,7 @@ sets = unique(longdata$set)
 cleaned = lapply(sets, function(s){
   mydata = longdata %>% 
     filter(set==s) %>%
-    filter(!is.na(value))  # Remove missing values from above; will be restored on pivot_wider()
+    filter(!is.na(value))  # Remove missing values from above; will be restored on pivot_wider() as long as have at least one non-NA column
   outliers = check_outliers(mydata, method=c("zscore", "iqr", "mcd"),
                             threshold = list(iqr=args$iqr_cutoff, zscore=args$zscore_cutoff)) %>%
     as.logical()
@@ -74,7 +74,8 @@ cleaned = lapply(sets, function(s){
 filtered = cleaned %>%
   bind_rows() %>%
   select(-set) %>%
-  pivot_wider(id_cols = all_of(metacols), names_from="trait", values_from="value")
+  pivot_wider(id_cols = all_of(metacols), names_from="trait", values_from="value") %>%
+  right_join(adjusted[,metacols], by=metacols) # Make sure restore all original rows; any missing will have 100% NAs for traits
 
 #################
 # Combine across reps
