@@ -9,6 +9,11 @@ library(scales)
 library(gridExtra)
 library(ggpubr)
 library(grid)
+library(colorspace)
+#library(patchwork)
+library(png)
+library(gridExtra)
+library(grid)
 
 # Arguments
 parser=ArgumentParser()
@@ -22,6 +27,7 @@ parser$add_argument("-g", "--glm-infiles", nargs="*", help="Input files of GLM r
 parser$add_argument("-p", "--pval-cutoff", type="double", default=0.01, help="Cutoff for empirical p-value to be considered significant")
 # Other arguments
 # parser$add_argument("--index", help="Samtools index of chromosome sizes")
+parser$add_argument("-l", "--legend-file", help="File with custom legend to add below multi-treatment composite plots")
 parser$add_argument("--drop-contigs", default=FALSE, action="store_true", help="Whether to drop contigs from the plot")
 parser$add_argument("--debug", default=FALSE, action="store_true", help="Debugging (to make some steps faster")
 parser$add_argument("-o", "--outprefix", help="Output file prefix")
@@ -31,6 +37,7 @@ args=parser$parse_args()
 #                        "3e_Results.BLINK/3e_PhiPS60_TRT2.p0.05.rmip0.05.csv",
 #                        "-g","3g_TASSEL_GLM/3h_glm_results_10.sites.txt.gz",
 #                        "3g_TASSEL_GLM/3h_glm_results_28.sites.txt.gz",
+#                        "-l", "../../0_Scripts/manhattan-legend.png",
 #                        "--debug",
 #                        "-o", "99_tmp"))
 
@@ -41,6 +48,7 @@ args=parser$parse_args()
 # out.dpi=600
 # legend.file="wallace-legend.png"
 
+colorscale=c("#D81B60", "#1E88E5", "#FFC107")
 
 ##########
 # Load data
@@ -124,7 +132,7 @@ get_offset = function(chr, pos){
 }
 
 ############
-# Plot Manhattans
+# Plot Manhattans (1 per treatment)
 ############
 
 # Plot a single manhattan plot
@@ -245,6 +253,155 @@ get_plots = function(traits){
                nrow=2, heights=c(10,1), bottom=chrom_label, left=left_label, right=right_label)
 }
 
+
+##################
+# Plot Manhattans - Combined across treatmetns (color differentiating)
+##################
+
+# Note: Lots of reused code here. Prefer to keep it separate so can tweak the two formats separately
+
+# Make a manhattan plot combined across years
+get_combined_plot = function(traits){
+  
+  # Load in data
+  cat("\tPlotting single manhattan for",traits, "\n")
+  trait_name = traits %>%
+    sub(pattern="_TRT.+", repl="")  %>%
+    unique()
+  
+  # Format and combined data
+  glm = lapply(traits, function(t){
+    glms[[t]] %>%
+      mutate(treatment=sub(Trait, pattern=".+_(TRT.)", repl="\\1"))
+  }) %>%
+    bind_rows()
+  rmip = lapply(traits, function(t){
+    rmips[[t]] %>%
+      mutate(Trait=t,
+        treatment=sub(Trait, pattern=".+_(TRT.)", repl="\\1"),
+        snp=as.character(snp))  # to fix subtle bug
+  }) %>%
+    bind_rows()
+  
+  # Sanity checks
+  if(is.null(glm)){
+    cat("Cannot plot due to null results for", trait_name,"GLM\n")
+    return(NULL)
+  }
+  if(is.null(rmip)){
+    cat("Cannot plot due to null results for", trait_name,"RMIP\n")
+    return(NULL)
+  }
+  
+  # Subset out permutation significance
+  glm.sig = subset(glm, glm$perm_p <= args$pval_cutoff)
+  
+  # Reformat RMIP data
+  rmip.all = rmip # Backup of complete RMIP data
+  rmip = rmip %>% filter(rmip >= args$rmip_cutoff)
+  
+  # Set up plotting colors
+  treat_levels = unique(c(glm$treatment, rmip$treatment)) %>% sort()
+  #chrom_colors=RColorBrewer::brewer.pal(3, "Set1")[1:length(treat_levels)]
+  chrom_colors=colorscale[1:length(treat_levels)] 
+  names(chrom_colors) = treat_levels
+  #chrom_colors_dark = chrom_colors %>% darken(amount=0.5)
+  # my_alpha = 0.5
+  # if(all(glm$Pos==1)){ # Set alpha to 0 for GLM if is a dummy dataset (all positions at 1)
+  #   my_alpha=0
+  # }
+  
+  # Basic plotting
+  glm_offset = floor(min(glm$log.p))  # Offset by nearest integer below
+  myplot = ggplot(glm) +
+    aes(x=get_offset(Chr, Pos), y=log.p - glm_offset, color=treatment) + 
+    #geom_point(alpha=0.05) + 
+    geom_point(mapping=aes(color=treatment, color = after_scale(darken(color, 0.3))), alpha=0.05) +  # Make a scatterplot with darker colors
+    scale_color_manual(values=chrom_colors) +
+    theme_few() + # Low-clutter theme
+    scale_x_continuous(breaks=offsets$midpoint, minor_breaks = offsets$offset, labels=rownames(offsets)) +  # Set labels and line positions for X axis
+    labs(x="Position", y=expression(bold(paste("-", log[10], " p-value (GLM)"))),
+         color="Treatment") + # X and Y axis labels
+    ggtitle(trait_name) +
+    theme(title = element_text(size=10, face='bold')) + # Set title 
+    guides(alpha="none",  # Remove alpha transparency legend
+           color = guide_legend(override.aes = list(alpha = 1, size=4)))  # Make legend points non-transparent
+
+  # Add significant GLM hits
+  myplot = myplot +
+    geom_point(data=glm.sig, size=2, color="white", shape=21, stroke=2, show.legend=FALSE) + # White stroke
+    geom_point(data=glm.sig, size=2, fill=alpha('white', 0), shape=21, stroke=1.5, show.legend=FALSE)
+  
+  # Add right Y axis to plot and adjust left axis to reflect GLM offset
+  if(nrow(rmip.all)>0){
+    rmip.max = max(c(args$rmip_cutoff, rmip.all$rmip))
+  }else{
+    rmip.max=1
+  }
+  scale_trans = rmip.max / max(glm$log.p)    
+  myplot = myplot +
+    scale_y_continuous(labels = function(x){x+glm_offset},
+                       sec.axis = sec_axis(transform = ~. * scale_trans, name="RMIP"))
+
+  # Add RMIPs (if exist)
+  if(nrow(rmip.all) > 0){
+    for(mytreat in treat_levels){
+      cum_color=chrom_colors[mytreat]
+      for(mychrom in rownames(offsets)){
+
+        # Get cumulative RMIP values
+        mypoints = data.frame(Chr=as.numeric(mychrom), Pos=seq(0, offsets[mychrom, "length"], by=args$step), cum_rmip=0)
+        for(i in 1:nrow(mypoints)){
+          mypos = mypoints[i, "Pos"]
+          nearby_hits = subset(rmip.all, rmip.all$Chr==mychrom & rmip.all$treatment==mytreat &
+                                 abs(rmip.all$Pos - mypos) <= args$winsize/2)
+          mypoints$cum_rmip[i] = sum(nearby_hits$rmip)
+        }
+
+        # Get translated Y values
+        mypoints$rmip.plot = rescale(mypoints$cum_rmip, from=c(0, max(rmip.all$rmip)), to=c(0, max(glm$log.p)))
+
+        # Add cumulative RMIP trace to plot
+        myplot = myplot +
+          geom_line(data=mypoints, mapping=aes(y=rmip.plot), color="white", linewidth=1, alpha=0.5) +
+          geom_line(data=mypoints, mapping=aes(y=rmip.plot), color=cum_color, linewidth=0.5)
+      }
+
+    }
+    # Add horizontal reference line
+    ref_line_y = rescale(args$rmip_cutoff, from=c(0, rmip.max), to=c(0, max(glm$log.p)))
+    myplot = myplot +
+      geom_hline(yintercept=ref_line_y, color="black", linewidth=0.35, linetype="dashed")
+  }
+  
+  # Significant rmipCPU hits by RMIP
+  if(nrow(rmip) > 0){
+    rmip$rmip.plot = rescale(rmip$rmip, from=c(0, max(rmip$rmip)), to=c(0, max(glm$log.p)))
+    #rmip_color="black"
+    myplot = myplot +
+      geom_point(data=rmip, mapping=aes(y=rmip.plot, fill=treatment), color="black", stroke=0.5, size=2.5, shape=25, show.legend = FALSE) +
+      scale_fill_manual(values=chrom_colors)
+  }
+  
+  # Add legend
+  if(!is.null(args$legend_file)){
+    legend = readPNG(args$legend_file, native=TRUE) %>%
+      rasterGrob
+    myplot = grid.arrange(arrangeGrob(grobs=list(myplot), ncol=1), legend, nrow=2, heights=c(10,1))
+    
+  }
+  
+  return(myplot)
+  
+}
+
+
+###############
+# Actual plotting section
+###############
+
+
+
 # Plot trait groupings by trait
 stems = c(names(glms), names(rmips)) %>%
   sub(pattern="_TRT[0-9]", repl="") %>%  # Group 3 treatments
@@ -258,32 +415,15 @@ for(stem in stems){
   traits = traits[grep(traits, pattern=paste("^", stem, sep=""))] %>%
     sort()
   
-  # Plot and save
+  # Plot and save (separate for each treatment)
   myplots = get_plots(traits)
-  outfile=paste(args$outprefix, stem, "png", sep=".")
-  ggsave(myplots, file=outfile, width=12, height=2*length(traits))
+  outfile1=paste(args$outprefix, stem, "png", sep=".")
+  ggsave(myplots, file=outfile1, width=12, height=2*length(traits))
+  
+  # Plot and save (combined across TRTs in one image)
+  combined_plot = get_combined_plot(traits)
+  outfile2=paste(args$outprefix, stem, "combined", "png", sep=".")
+  ggsave(combined_plot, file=outfile2, width=12, height=3)
+  
 }
-
-
-# 
-# 
-# # Aphid damage
-# png("Figure - Aphid Damage Manhattan plots.png", width=out.width, height=8, units="in", res=out.dpi)
-# get_plots(c("D1 Aphid Count (log)", "D1 Aphid Damage (log)", "D2 Aphid Damage (log)","Greenhouse Damage"))
-# dev.off()
-# 
-# # Drones
-# png("Figure - Drone Manhattan plots (no covariates).png", width=out.width, height=5.5, units="in", res=out.dpi)
-# get_plots(c("NDRE", "NDVI", "SAVI"))
-# dev.off()
-# png("Figure - Drone Manhattan plots (flowering covariate).png", width=out.width, height=5.5, units="in", res=out.dpi)
-# get_plots(c("NDRE (flowering covariate)", "NDVI (flowering covariate)", "SAVI (flowering covariate)"))
-# dev.off()
-# 
-# # Flowering + Height
-# png("Figure - Flowering and Height Manhattan plots.png", width=out.width, height=4, units="in", res=out.dpi)
-# get_plots(c("Flowering Time", "Plant Height (log)"))
-# dev.off()
-
-
 
